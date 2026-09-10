@@ -243,6 +243,7 @@ class FrankaOpenDataGenConfig(OpeningBaseConfig):
     policy_config: BasePolicyConfig = OpenClosePlannerPolicyConfig()
     task_horizon: int | None = 200  # Maximum number of steps per episode (if None, no time limit)
     output_dir: Path = ASSETS_DIR / "experiment_output" / "datagen" / "open_v1"
+    filter_for_successful_trajectories: bool = False
 
     @property
     def tag(self) -> str:
@@ -266,7 +267,7 @@ class RBY1OpenDataGenConfig(OpeningBaseConfig):
     task_horizon: int | None = 200  # Maximum number of steps per episode (if None, no time limit)
     use_passive_viewer: bool = False
     seed: int = None
-    filter_for_successful_trajectories: bool = True
+    filter_for_successful_trajectories: bool = False
     policy_dt_ms: float = 100.0  # Default policy time step
     ctrl_dt_ms: float = 20.0  # Default control time step
     sim_dt_ms: float = 4.0  # Default simulation time step
@@ -305,6 +306,9 @@ class RBY1OpenDataGenConfig(OpeningBaseConfig):
             policy_factory=CuroboOpenClosePlannerPolicy,
             left_curobo_planner_config=left_curobo_planner_config,
             right_curobo_planner_config=right_curobo_planner_config,
+            server_urls=[],
+            max_steps_per_waypoint=30,      # 原来默认是 10
+            max_planning_reattempts=5,
         )
 
     def model_post_init(self, __context) -> None:
@@ -320,7 +324,7 @@ class RBY1PickAndPlaceDataGenConfig(PickAndPlaceDataGenConfig):
     viewer_cam_dict: dict = {"camera": "robot_0/camera_follower"}
     use_passive_viewer: bool = False
     task_horizon: int | None = 400  # Maximum number of steps per episode (if None, no time limit)
-    filter_for_successful_trajectories: bool = True
+    filter_for_successful_trajectories: bool = False
     output_dir: Path = ASSETS_DIR / "experiment_output" / "datagen" / "rby1_pick_and_place_v1"
     wandb_project: str = "mujoco-thor-data-generation"
     policy_dt_ms: float = 100.0  # Default policy time step
@@ -362,6 +366,7 @@ class RBY1PickAndPlaceDataGenConfig(PickAndPlaceDataGenConfig):
             left_curobo_planner_config=left_curobo_planner_config,
             right_curobo_planner_config=right_curobo_planner_config,
             enable_collision_avoidance=True,
+            server_urls=[]
         )
 
     def model_post_init(self, __context) -> None:
@@ -398,7 +403,7 @@ class RBY1PickDataGenConfig(PickBaseConfig):
     viewer_cam_dict: dict = {"camera": "robot_0/camera_follower"}
     use_passive_viewer: bool = False
     task_horizon: int | None = 400  # Maximum number of steps per episode (if None, no time limit)
-    filter_for_successful_trajectories: bool = True
+    filter_for_successful_trajectories: bool = False
     output_dir: Path = ASSETS_DIR / "experiment_output" / "datagen" / "rby1_pick_v1"
     policy_dt_ms: float = 100.0  # Default policy time step
     ctrl_dt_ms: float = 20.0  # Default control time step
@@ -439,6 +444,12 @@ class RBY1PickDataGenConfig(PickBaseConfig):
             left_curobo_planner_config=left_curobo_planner_config,
             right_curobo_planner_config=right_curobo_planner_config,
             enable_collision_avoidance=True,
+            # Use the in-process CuRobo planner instead of the remote gRPC
+            # planner. An empty list is intentional: the policy selects the
+            # local planner whenever ``server_urls`` is empty.
+            server_urls=[],
+            max_steps_per_waypoint=30,      # 原来默认是 10
+            max_planning_reattempts=5,
         )
 
     def model_post_init(self, __context) -> None:

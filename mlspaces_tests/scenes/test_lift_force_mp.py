@@ -93,6 +93,10 @@ SETTINGS: TestSettings | None = None
 def json_serializer(obj):
     if isinstance(obj, Path):
         return obj.as_posix()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
@@ -443,7 +447,7 @@ def run_lift_force_test(house_filepath: Path) -> tuple[bool, dict[str, Any], Cou
         ]
 
         # Save the data for the ones that were lifted
-        results["counts"]["success"]["num"] = np.count_nonzero(bodies_lifted_mask)
+        results["counts"]["success"]["num"] = int(np.count_nonzero(bodies_lifted_mask))
         results["counts"]["success"]["names"] = bodies_names_lifted
         results["counts"]["success"]["masses"] = model.body_subtreemass[bodies_ids_lifted].tolist()
         results["counts"]["success"]["diff-height"] = bodies_diff_height[
@@ -454,7 +458,7 @@ def run_lift_force_test(house_filepath: Path) -> tuple[bool, dict[str, Any], Cou
         ].tolist()
 
         # Save the data for the ones that couldn't be lifted
-        num_cant_lift = np.count_nonzero(bodies_cant_lift_mask)
+        num_cant_lift = int(np.count_nonzero(bodies_cant_lift_mask))
         results["counts"]["failed"]["num"] = num_cant_lift
         results["counts"]["failed"]["cant_lift"]["num"] = num_cant_lift
         results["counts"]["failed"]["cant_lift"]["names"] = bodies_names_cant_lift

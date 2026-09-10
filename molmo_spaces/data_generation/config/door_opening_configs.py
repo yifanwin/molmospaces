@@ -111,6 +111,9 @@ class DoorOpeningDataGenConfig(MlSpacesExpConfig):
             policy_factory=DoorOpeningPlannerPolicy,
             left_curobo_planner_config=left_curobo_planner_config,
             right_curobo_planner_config=right_curobo_planner_config,
+            server_urls=[],
+            # max_steps_per_waypoint=30,      # 原来默认是 10
+            # max_planning_reattempts=5,
         )
 
     def model_post_init(self, __context) -> None:

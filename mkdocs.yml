@@ -49,6 +49,7 @@ nav:
       - Code Structure: code_structure.md
       - Gym Compatibility: gym_compatibility.md
       - Development: development.md
+      - Keyboard Teleoperation: keyboard_teleop.md
       - Tutorials:
         - "Add a custom robot": tutorials/add_robot.md
         - "Add a custom asset library": tutorials/custom_assets.md

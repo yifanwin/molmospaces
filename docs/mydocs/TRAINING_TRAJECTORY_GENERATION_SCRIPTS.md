@@ -227,23 +227,28 @@ python scripts/datagen/run_pipeline.py --viewer --seed 1
 
 ### 3.4 常用参数
 
-| 参数 | 作用 |
-|---|---|
-| `--task_type` | 选择任务 |
-| `--robot` | 选择机器人 |
-| `--policy` | 选择策略 |
-| `--scene_dataset` | 选择场景数据集 |
-| `--data_split` | 选择数据 split |
-| `--house_inds` | 指定 house 索引 |
-| `--target_types` | 限制目标物体类别 |
-| `--samples_per_house` | 每个 house 采样数量 |
-| `--filter_for_successful_trajectories` | 仅保存成功轨迹 |
-| `--randomize_lighting` | 随机化光照 |
-| `--randomize_textures` | 随机化纹理 |
-| `--randomize_dynamics` | 随机化动力学参数 |
-| `--randomize_scene` | 随机场景参数 |
-| `--seed` | 设置随机种子 |
-| `--run_name_prefix` | 设置输出目录前缀 |
+| 参数 | 作用 | 默认值 | 示例 |
+|---|---|---|---|
+| `--task_type` | 选择任务 | `pick` | `open`、`pick_and_place` |
+| `--robot` | 选择机器人 | `droid` | `franka`、`rby1` |
+| `--policy` | 选择策略 | `planner` | `pi`、`teleop` |
+| `--scene_dataset` | 选择场景数据集 | `ithor` | `procthor-10k` |
+| `--data_split` | 选择数据 split | `train` | `test` |
+| `--house_inds` | 指定 house 索引 | `1` | `5` |
+| `--target_types` | 限制目标物体类别 | 无（不限制） | `Cup,Bowl` |
+| `--samples_per_house` | 每个 house 采样数量 | `4` | `10` |
+| `--filter_for_successful_trajectories` | 仅保存成功轨迹 | 关闭（开关参数） | `--filter_for_successful_trajectories` |
+| `--randomize_lighting` | 随机化光照 | `False` | `--randomize_lighting true` |
+| `--randomize_textures` | 随机化纹理 | `False` | `--randomize_textures true` |
+| `--randomize_dynamics` | 随机化动力学参数 | `False` | `--randomize_dynamics true` |
+| `--randomize_scene` | 随机场景参数 | `False` | `--randomize_scene true` |
+| `--seed` | 设置随机种子 | `2` | `1` |
+| `--run_name_prefix` | 设置输出目录前缀 | 空 | `debug_` |
+
+注意：
+
+- `randomize_*` 系列参数使用 `type=bool` 解析，任何非空取值（包括 `False`、`false`）都会被解析为 `True`，关闭随机化的唯一方式是不传该参数；
+- `--filter_for_successful_trajectories` 是开关参数（`store_true`），直接写参数名即开启，不需要跟值。
 
 ### 3.5 使用限制
 

@@ -735,8 +735,10 @@ class PickTaskSampler(BaseMujocoTaskSampler):
             return supporting_geom_id
 
         raise HouseInvalidForTask(
-            f"Unable to sample a valid task after {attempts} attempts, "
-            f"{len(self.candidate_objects)} candidates remaining"
+            reason=(
+                f"Unable to sample a valid task after {attempts} attempts, "
+                f"{len(self.candidate_objects)} candidates remaining"
+            )
         )
 
     def _generate_referral_expressions(
@@ -1000,7 +1002,7 @@ class PickTaskSampler(BaseMujocoTaskSampler):
         robot_placed = env.place_robot_near(
             robot_view=robot_view,
             target=pickup_obj,
-            max_tries=10,  # Use config value or reasonable default
+            max_tries=self.config.task_sampler_config.max_robot_placement_attempts,
             sampling_radius_range=self.config.task_sampler_config.base_pose_sampling_radius_range,
             robot_safety_radius=self.config.task_sampler_config.robot_safety_radius,
             preserve_z=initial_robot_z,
@@ -1016,6 +1018,16 @@ class PickTaskSampler(BaseMujocoTaskSampler):
         if not robot_placed:
             log.info(f"[TASK SAMPLING] Failed to place robot near '{pickup_obj.name}'")
             raise RobotPlacementError(f"Failed to place robot near object: {pickup_obj.name}")
+
+        # place_robot_near teleports qpos after randomize_scene() has already
+        # reset the position controllers.  Without re-synchronizing them, the
+        # mobile-base controller still targets the old world pose (usually the
+        # origin), so the first gripper/no-op action can make the robot shoot
+        # through furniture on its way back to that stale target.
+        for controller in env.current_robot.controllers.values():
+            controller.reset()
+        env.current_robot.set_stationary()
+        env.current_robot.compute_control()
 
         # Add successful position to cache
         self.used_robot_positions[pickup_obj.name].append(robot_view.base.pose[:3, 3])

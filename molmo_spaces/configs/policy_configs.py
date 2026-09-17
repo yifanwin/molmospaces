@@ -99,6 +99,13 @@ class ObjectManipulationPlannerPolicyConfig(BasePolicyConfig):
     grasp_feasibility_batch_size: int = 256
     grasp_feasibility_max_grasps: int = 256
 
+    # Kinematics / return-home move groups. ``None`` preserves the legacy
+    # behavior: IK may use every non-gripper move group and go-home commands
+    # every group present in robot_config.init_qpos.  Mobile manipulators can
+    # override these lists to keep the base fixed while manipulating objects.
+    ik_unlocked_move_group_ids: list[str] | None = None
+    go_home_move_group_ids: list[str] | None = None
+
     # which grasp libraries to use, in descending priority (will be filtered by availability for each asset)
     # if None, all available libraries for the object will be used
     grasp_libraries: list[str] | None = None

@@ -459,6 +459,43 @@ class FrankaRandomizedD405D455CameraSystem(CameraSystemConfig):
     ]
 
 
+class PandaOmronCameraSystem(CameraSystemConfig):
+    """robosuite PandaOmron 的腕部、外部和跟随相机。
+
+    robosuite 在组合 ``PandaOmron`` 时会把 Panda 模型中的相机命名为
+    ``robot0_eye_in_hand`` 和 ``robot0_robotview``。这里保留标准的观测键
+    ``wrist_camera`` / ``exo_camera_1``，使生成的数据与现有 pick-and-place
+    数据管线兼容。``camera_follower`` 是 MolmoSpaces 添加在 Omron 底盘上的
+    导航式第三人称跟随视角。
+    """
+
+    img_resolution: tuple[int, int] = (640, 368)
+    cameras: list[AllCameraTypes] = [
+        MjcfCameraConfig(
+            name="wrist_camera",
+            mjcf_name="robot0_eye_in_hand",
+            robot_namespace="robot_0/",
+            fov=75.0,
+            record_depth=True,
+        ),
+        MjcfCameraConfig(
+            name="exo_camera_1",
+            mjcf_name="robot0_robotview",
+            robot_namespace="robot_0/",
+            visibility_constraints={
+                "__task_objects__": 0.0001,
+                "__gripper__": 0.0001,
+            },
+        ),
+        MjcfCameraConfig(
+            name="camera_follower",
+            mjcf_name="camera_follower",
+            robot_namespace="robot_0/",
+            fov=60.0,
+        ),
+    ]
+
+
 class FrankaDroidCameraSystem(CameraSystemConfig):
     """Camera system for Franka with DROID-style fixed cameras.
 
@@ -1054,6 +1091,7 @@ class FrankaEvalCameraSystem(CameraSystemConfig):
 AllCameraSystems: TypeAlias = (
     RBY1MjcfCameraSystem
     | RBY1GoProD455CameraSystem
+    | PandaOmronCameraSystem
     | FrankaRandomizedD405D455CameraSystem
     | FrankaEasyRandomizedDroidCameraSystem
     | FrankaDroidCameraSystem

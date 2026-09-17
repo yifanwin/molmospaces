@@ -33,6 +33,12 @@ class HouseInvalidForTask(Exception):
     """
 
     def __init__(self, house_info=None, reason=None, error=None) -> None:
+        # Historical call sites commonly pass one human-readable positional
+        # string. Interpret it as the reason instead of reporting reason=None.
+        if isinstance(house_info, str) and reason is None:
+            reason = house_info
+            house_info = None
+
         self.house_info = house_info
         self.reason = reason
         self.error = error

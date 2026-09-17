@@ -93,6 +93,7 @@ class PickPlannerPolicy(BaseObjectManipulationPlannerPolicy):
             rot_cost_weight=self.policy_config.grasp_rot_cost_weight,
             vertical_cost_weight=self.policy_config.grasp_vertical_cost_weight,
             com_dist_cost_weight=self.policy_config.grasp_com_dist_cost_weight,
+            ik_unlocked_move_group_ids=self._get_ik_unlocked_move_group_ids(),
         )
 
         target_poses = {}

@@ -26,6 +26,21 @@ class PickAndPlacePlannerPolicy(BaseObjectManipulationPlannerPolicy):
         robot_view = self.task.env.current_robot.robot_view
         target_poses = self._compute_target_poses()
 
+        home_move_group_ids = self.policy_config.go_home_move_group_ids
+        if home_move_group_ids is None:
+            home_qpos = self.config.robot_config.init_qpos
+        else:
+            missing = set(home_move_group_ids) - set(self.config.robot_config.init_qpos)
+            if missing:
+                raise ValueError(
+                    "go_home_move_group_ids are missing from robot init_qpos: "
+                    f"{sorted(missing)}"
+                )
+            home_qpos = {
+                mg_id: self.config.robot_config.init_qpos[mg_id]
+                for mg_id in home_move_group_ids
+            }
+
         gripper_mg_id = robot_view.get_gripper_movegroup_ids()[0]
         start_ee_pose = robot_view.get_move_group(gripper_mg_id).leaf_frame_to_world
 
@@ -108,7 +123,7 @@ class PickAndPlacePlannerPolicy(BaseObjectManipulationPlannerPolicy):
                     JointMoveSegment(
                         name="go_home",
                         start_qpos=None,
-                        end_qpos=self.config.robot_config.init_qpos,
+                        end_qpos=home_qpos,
                         duration_s=4.0,
                     )
                 ],
@@ -261,6 +276,7 @@ class PickAndPlacePlannerPolicy(BaseObjectManipulationPlannerPolicy):
             rot_cost_weight=self.policy_config.grasp_rot_cost_weight,
             vertical_cost_weight=self.policy_config.grasp_vertical_cost_weight,
             com_dist_cost_weight=self.policy_config.grasp_com_dist_cost_weight,
+            ik_unlocked_move_group_ids=self._get_ik_unlocked_move_group_ids(),
         )
 
         pregrasp_pose, grasp_pose, lift_pose = self._get_grasp_poses(

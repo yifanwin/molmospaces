@@ -26,17 +26,20 @@ from molmo_spaces.configs.camera_configs import (
     FrankaOmniPurposeCameraSystem,
     FrankaRandomizedD405D455CameraSystem,
     FrankaRandomizedDroidCameraSystem,
+    PandaOmronCameraSystem,
     RBY1GoProD455CameraSystem,
 )
 from molmo_spaces.configs.policy_configs import (
     CuroboOpenClosePlannerPolicyConfig,
     CuroboPickAndPlacePlannerPolicyConfig,
     OpenClosePlannerPolicyConfig,
+    PickAndPlacePlannerPolicyConfig,
     PickPlannerPolicyConfig,
 )
 from molmo_spaces.configs.robot_configs import (
     FloatingRUMRobotConfig,
     FrankaRobotConfig,
+    PandaOmronRobotConfig,
     RBY1MConfig,
     RBY1MOpenCloseConfig,
 )
@@ -134,6 +137,56 @@ class FrankaPickAndPlaceDataGenConfig(PickAndPlaceDataGenConfig):
     @property
     def tag(self) -> str:
         return "franka_pick_and_place_datagen"
+
+
+@register_config("PandaOmronPickAndPlaceDataGenConfig")
+class PandaOmronPickAndPlaceDataGenConfig(PickAndPlaceDataGenConfig):
+    """Panda + Omron 移动机器人 pick-and-place 数据生成配置。"""
+
+    viewer_cam_dict: dict = {"camera": "robot_0/camera_follower"}
+    robot_config: PandaOmronRobotConfig = PandaOmronRobotConfig()
+    camera_config: PandaOmronCameraSystem = PandaOmronCameraSystem()
+    policy_config: PickAndPlacePlannerPolicyConfig = PickAndPlacePlannerPolicyConfig(
+        # Droid libraries provide 1000 poses and the planner also evaluates their
+        # flipped variants. Thin objects such as pencils often have all of the
+        # top 512 ranked poses intersecting the supporting surface even though
+        # valid poses exist later in the list.
+        grasp_collision_max_grasps=2000,
+        grasp_feasibility_max_grasps=512,
+        # Object-manipulation IK interpolates directly in task space and is not
+        # a collision-aware mobile-base planner. Keep Omron fixed after its
+        # collision-checked placement; use only torso + Panda arm for IK/home.
+        ik_unlocked_move_group_ids=["torso", "arm"],
+        go_home_move_group_ids=["torso", "arm"],
+    )
+    task_sampler_config: PickAndPlaceTaskSamplerConfig = PickAndPlaceTaskSamplerConfig(
+        task_sampler_class=PickAndPlaceTaskSampler,
+        pickup_types=[],
+        samples_per_house=20,
+        # 每个 house 使用一个 work item，避免候选耗尽后同一 house 的多个
+        # batch 被误计成多个连续 irrecoverable house。
+        episodes_per_batch=20,
+        # 随后仍会使用完整 Omron 碰撞模型复检；0.4 m 在狭窄场景中过于保守。
+        robot_safety_radius=0.35,
+        base_pose_sampling_radius_range=(0.25, 0.75),
+        max_robot_placement_attempts=50,
+        # robotview 是近距离诊断视角，经常被家具或机械臂遮挡。保留记录，
+        # 但不使用它否决原本无碰撞的机器人放置结果。
+        check_robot_placement_visibility=False,
+    )
+    policy_dt_ms: float = 66.0  # ~15 Hz
+    output_dir: Path = (
+        ASSETS_DIR / "experiment_output" / "datagen" / "panda_omron_pick_and_place_v1"
+    )
+    filter_for_successful_trajectories: bool = False
+
+    class SavedEpisode(PickAndPlaceDataGenConfig.SavedEpisode):
+        robot_config: PandaOmronRobotConfig | None = None
+        camera_config: PandaOmronCameraSystem | None = None
+
+    @property
+    def tag(self) -> str:
+        return "panda_omron_pick_and_place_datagen"
 
 
 @register_config("FrankaPickAndPlaceEasyDataGenConfig")

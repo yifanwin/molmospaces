@@ -96,6 +96,30 @@ The optional installation options are:
 - `grasp` installs dependencies for the grasp generation pipeline.
 - `housegen` installs dependencies for the house generation pipeline from iTHOR, ProcTHOR, or Holodeck JSONs.
 - `curobo` installs CuRobo for GPU-accelerated planning.
+- `robosuite` installs robosuite 1.5.x and enables the optional Panda + Omron robot.
+
+To use the Panda arm, Panda gripper, and Omron mobile base from robosuite:
+
+```bash
+pip install -e ".[mujoco,robosuite]"
+```
+
+For development with a sibling robosuite checkout, install that checkout in editable mode instead:
+
+```bash
+pip install -e ../robosuite
+```
+
+Then select `PandaOmronRobotConfig` as the experiment's `robot_config`. Its native
+MolmoSpaces action groups are `base`, `torso`, `arm`, and `gripper`.
+
+The ready-to-run pick-and-place data-generation preset uses robosuite's built-in
+`eye_in_hand` and `robotview` cameras, plus a navigation-style third-person
+`camera_follower` attached to the Omron base:
+
+```bash
+python -m molmo_spaces.data_generation.main PandaOmronPickAndPlaceDataGenConfig
+```
 
 You may wish to specify some [environment variables](#environment-variables) to configure behavior.
 Currently `molmospaces` supports Linux and Mac.

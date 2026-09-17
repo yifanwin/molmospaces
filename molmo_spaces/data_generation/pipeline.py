@@ -386,6 +386,7 @@ def house_processing_worker(
 
     # Track sequential irrecoverable failures at worker level
     num_sequential_irrecoverable_failures = 0
+    last_irrecoverable_house_id = None
 
     # Normal datagen: create task sampler once for this worker (persists across all houses)
     # This allows the worker to track object diversity and other state across houses
@@ -450,7 +451,12 @@ def house_processing_worker(
 
                 # Track sequential irrecoverable failures
                 if irrecoverable:
-                    num_sequential_irrecoverable_failures += 1
+                    # A work item is a batch. Several failed batches belonging
+                    # to one exhausted house must count as one bad house, not as
+                    # several sequential irrecoverable houses.
+                    if current_house_id != last_irrecoverable_house_id:
+                        num_sequential_irrecoverable_failures += 1
+                        last_irrecoverable_house_id = current_house_id
                     if (
                         num_sequential_irrecoverable_failures
                         >= max_allowed_sequential_irrecoverable_failures
@@ -463,6 +469,7 @@ def house_processing_worker(
                 else:
                     # Reset counter on success
                     num_sequential_irrecoverable_failures = 0
+                    last_irrecoverable_house_id = None
 
             worker_logger.info(f"Worker {worker_id} completed processing assigned work items")
         finally:
@@ -1021,6 +1028,15 @@ class ParallelRolloutRunner:
 
                 # Rollout phase (only if task sampling succeeded)
                 if task is not None and not house_invalid and not task_sampling_failed:
+                    # Resolve this before reset / rollout. Policy.reset() can
+                    # reject the sampled task (for example, no feasible grasp),
+                    # and exception accounting must not reuse the previous
+                    # episode's object name.
+                    object_name = "unknown"
+                    if hasattr(task, "config") and hasattr(task.config, "task_config"):
+                        if hasattr(task.config.task_config, "pickup_obj_name"):
+                            object_name = task.config.task_config.pickup_obj_name
+
                     try:
                         # Setup policy and viewer
                         policy = setup_policy(
@@ -1046,12 +1062,6 @@ class ParallelRolloutRunner:
                         )
 
                         num_sequential_rollout_failures = 0
-
-                        # Extract object name for logging if available
-                        object_name = "unknown"
-                        if hasattr(task, "config") and hasattr(task.config, "task_config"):
-                            if hasattr(task.config.task_config, "pickup_obj_name"):
-                                object_name = task.config.task_config.pickup_obj_name
 
                         worker_logger.info(
                             f"Worker {worker_id} house {house_id} episode {episode_idx} "

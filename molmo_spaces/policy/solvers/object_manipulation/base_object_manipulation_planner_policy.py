@@ -541,13 +541,12 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
     def _tcp_to_jp_fn(self, mg_id: str, target_pose: np.ndarray) -> dict[str, Any]:
         kinematics = self.task.env.current_robot.kinematics
 
-        gripper_mgs = set(self.robot_view.get_gripper_movegroup_ids())
-        mgs_except_gripper = [x for x in self.robot_view.move_group_ids() if x not in gripper_mgs]
+        unlocked_move_groups = self._get_ik_unlocked_move_group_ids()
 
         jp = kinematics.ik(
             mg_id,
             target_pose,
-            mgs_except_gripper,
+            unlocked_move_groups,
             self.robot_view.get_qpos_dict(),
             self.robot_view.base.pose,
         )
@@ -555,7 +554,7 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
         action = self.robot_view.get_ctrl_dict()
         if jp is not None:
             self.sequential_ik_failures = 0
-            action.update({mg_id: jp[mg_id] for mg_id in mgs_except_gripper})
+            action.update({mg_id: jp[mg_id] for mg_id in unlocked_move_groups})
         else:
             self.sequential_ik_failures += 1
             log.info(f"⚠️ IK failed, holding current position, fails:{self.sequential_ik_failures}")
@@ -564,6 +563,28 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
                 return self._handle_failure()
 
         return action
+
+    def _get_ik_unlocked_move_group_ids(self) -> list[str]:
+        """Return move groups that object-manipulation IK is allowed to move.
+
+        The historic default is every non-gripper move group.  A mobile robot
+        should normally configure only its torso and arm here: the straight
+        task-space interpolation used by this policy is not a collision-aware
+        base navigation planner.
+        """
+        configured = self.policy_config.ik_unlocked_move_group_ids
+        available = self.robot_view.move_group_ids()
+        if configured is None:
+            gripper_mgs = set(self.robot_view.get_gripper_movegroup_ids())
+            return [mg_id for mg_id in available if mg_id not in gripper_mgs]
+
+        unknown = set(configured) - set(available)
+        if unknown:
+            raise ValueError(
+                "Unknown ik_unlocked_move_group_ids "
+                f"{sorted(unknown)}; available move groups: {available}"
+            )
+        return list(configured)
 
     def check_feasible_ik(self, pose: np.ndarray) -> bool:
         if pose.ndim > 2:
@@ -585,7 +606,7 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
             jp_dicts = parallel_kinematics.ik(
                 gripper_mg_id,
                 pose,
-                None,
+                self._get_ik_unlocked_move_group_ids(),
                 robot_view.get_qpos_dict(),
                 robot_view.base.pose,
                 rel_to_base=False,
@@ -599,7 +620,7 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
             jp_dict = kinematics.ik(
                 gripper_mg_id,
                 pose,
-                robot_view.move_group_ids(),
+                self._get_ik_unlocked_move_group_ids(),
                 robot_view.get_qpos_dict(),
                 base_pose=robot_view.base.pose,
             )

@@ -114,6 +114,7 @@ def get_feasible_grasp_idx(
     grasp_poses_world: np.ndarray,
     n_ik_checks: int,
     ik_batch_size: int,
+    unlocked_move_group_ids: list[str] | None = None,
 ):
     n_checks_done = 0
     ret: int | None = None
@@ -133,7 +134,7 @@ def get_feasible_grasp_idx(
             ik_result = robot.parallel_kinematics.ik(
                 mg_id,
                 grasps,
-                None,
+                unlocked_move_group_ids,
                 robot.robot_view.get_qpos_dict(),
                 robot.robot_view.base.pose,
                 rel_to_base=False,
@@ -166,6 +167,7 @@ def select_grasp_pose(
     vertical_cost_weight: float = 2.0,
     horizontal_cost_weight: float = 0,
     com_dist_cost_weight: float = 8.0,
+    ik_unlocked_move_group_ids: list[str] | None = None,
 ) -> np.ndarray:
     robot = env.current_robot
     gripper_mg_id = robot.robot_view.get_gripper_movegroup_ids()[0]
@@ -225,6 +227,7 @@ def select_grasp_pose(
                 grasp_poses_world[noncolliding_close_grasp_ids],
                 n_ik_checks,
                 ik_batch_size,
+                ik_unlocked_move_group_ids,
             )
             if noncolliding_grasp_idx is not None:
                 grasp_idx = noncolliding_close_grasp_ids[noncolliding_grasp_idx]

@@ -17,7 +17,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "attrs",
     "beaker-py>2.0.0",
@@ -37,7 +37,7 @@ dependencies = [
     "moviepy",
     "msgpack>=1.0.6",
     "msgpack-numpy",
-    "mujoco-warp",
+    "mujoco-warp<3.7", # 3.7+ 要求 mujoco>=3.6，与 mujoco extra 的 ~=3.5.0 冲突
     "warp-lang",
     "nbstripout>=0.7.0",
     "nltk~=3.9.2",
@@ -102,7 +102,11 @@ mujoco = [
     "mujoco~=3.5.0",
 ]
 mujoco-filament = [
-    "mujoco @ file://${PROJECT_ROOT}/bin/wheels/mujoco-3.7.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    # 本地 filament wheel 仅适用 Linux + Python 3.11；来源见 [tool.uv.sources]
+    "mujoco==3.7.1 ; sys_platform == 'linux' and python_version == '3.11'",
+]
+robosuite = [
+    "robosuite>=1.5.2,<1.6",
 ]
 docs = [
     "mkdocs>=1.6.0",
@@ -128,14 +132,26 @@ include-package-data = true
 
 [tool.uv]
 package = true
+# mujoco 与 mujoco-filament 两个 extra 指定了互斥的 mujoco 来源，声明它们不能同时启用
+conflicts = [
+    [
+        { extra = "mujoco" },
+        { extra = "mujoco-filament" },
+    ],
+]
 environments = [
-    "sys_platform == 'darwin'",
     "sys_platform == 'linux'",
 ]
 extra-index-url = ["https://pypi.org/simple", "https://test.pypi.org/simple/"]
+# robosuite 等包只发布在 test.pypi.org，需要合并两个索引的版本
+index-strategy = "unsafe-best-match"
 
 [tool.uv.sources]
 bpy = { index = "bpy" }
+# mujoco-filament extra 启用时，mujoco 用本地 filament wheel；其余情况走 PyPI
+mujoco = [
+    { path = "bin/wheels/mujoco-3.7.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", extra = "mujoco-filament", marker = "python_full_version < '3.12'" },
+]
 
 [[tool.uv.index]]
 name = "bpy"

@@ -23,6 +23,7 @@ from molmo_spaces.robots.floating_rum import FloatingRUMRobot
 from molmo_spaces.robots.franka import FrankaRobot
 from molmo_spaces.robots.i2rt_yam import I2rtYamRobot
 from molmo_spaces.robots.mobile_franka import MobileFrankaRobot
+from molmo_spaces.robots.panda_omron import PandaOmronRobot
 from molmo_spaces.robots.rby1 import RBY1
 from molmo_spaces.robots.robot_views.abstract import RobotViewFactory
 from molmo_spaces.robots.robot_views.bimanual_yam_view import BimanualYamRobotView
@@ -35,6 +36,7 @@ from molmo_spaces.robots.robot_views.franka_droid_view import (
 )
 from molmo_spaces.robots.robot_views.i2rt_yam_view import I2rtYamRobotView
 from molmo_spaces.robots.robot_views.mobile_franka_droid_view import MobileFrankaDroidRobotView
+from molmo_spaces.robots.robot_views.panda_omron_view import PandaOmronRobotView
 from molmo_spaces.robots.robot_views.rby1_view import RBY1RobotView
 from molmo_spaces.robots.robot_views.rum_gripper_view import FloatingRUMRobotView
 
@@ -212,6 +214,74 @@ class MobileFrankaRobotConfig(BaseRobotConfig):
             "damping_ratio": 1.0,
         },
     }
+
+
+class PandaOmronRobotConfig(BaseRobotConfig):
+    """robosuite Panda arm and gripper mounted on an Omron LD-60 base."""
+
+    robot_cls: type[PandaOmronRobot] | None = PandaOmronRobot
+    robot_factory: Callable[[MjData, Any], Robot] | None = PandaOmronRobot
+    robot_namespace: str = "robot_0/"
+    robot_view_factory: RobotViewFactory | None = PandaOmronRobotView
+    name: str = "panda_omron"
+    # The model is generated in memory from robosuite; this is metadata required by BaseRobotConfig.
+    robot_xml_path: Path = Path("PandaOmron.runtime.xml")
+    init_qpos: dict[str, list[float]] = {
+        "base": [0.0, 0.0, 0.0],
+        "torso": [0.2],
+        "arm": [
+            0.0,
+            np.pi / 16.0 - 0.2,
+            0.0,
+            -np.pi / 2.0 - np.pi / 3.0,
+            0.0,
+            np.pi - 0.4,
+            np.pi / 4.0,
+        ],
+        "gripper": [0.020833, -0.020833],
+    }
+    init_qpos_noise_range: dict[str, list[float]] | None = {
+        "arm": [0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175],
+    }
+    command_mode: dict[str, str] = {
+        "base": "holo_joint_planar_position",
+        "torso": "joint_position",
+        "arm": "joint_position",
+        "gripper": "joint_position",
+    }
+    gravcomp: bool = True
+
+    # Position servos used to adapt robosuite's velocity / torque actuators.
+    base_kp: list[float] = [25000.0, 25000.0, 5000.0]
+    base_kv: list[float] = [1000.0, 1000.0, 1500.0]
+    base_ctrlrange: list[list[float]] = [
+        [-25.0, 25.0],
+        [-25.0, 25.0],
+        [-1.0e6, 1.0e6],
+    ]
+    torso_kp: float = 50000.0
+    torso_kv: float = 1000.0
+    arm_kp: list[float] = [4500.0, 4500.0, 3500.0, 3500.0, 2000.0, 2000.0, 2000.0]
+    arm_kv: list[float] = [450.0, 450.0, 350.0, 350.0, 200.0, 200.0, 200.0]
+
+    def model_post_init(self, context):
+        super().model_post_init(context)
+        if self.command_mode["base"] not in {
+            "holo_joint_planar_position",
+            "holo_joint_rel_planar_position",
+        }:
+            raise ValueError(f"Unsupported PandaOmron base mode: {self.command_mode['base']}")
+        if self.command_mode["arm"] not in {"joint_position", "joint_rel_position"}:
+            raise ValueError(f"Unsupported PandaOmron arm mode: {self.command_mode['arm']}")
+        if self.command_mode["torso"] != "joint_position":
+            raise ValueError("PandaOmron torso only supports joint_position")
+        if self.command_mode["gripper"] != "joint_position":
+            raise ValueError("PandaOmron gripper only supports joint_position")
+        if not (
+            len(self.base_kp) == len(self.base_kv) == len(self.base_ctrlrange) == 3
+            and len(self.arm_kp) == len(self.arm_kv) == 7
+        ):
+            raise ValueError("PandaOmron servo parameter dimensions are invalid")
 
 
 class FrankaCAPRobotConfig(BaseRobotConfig):

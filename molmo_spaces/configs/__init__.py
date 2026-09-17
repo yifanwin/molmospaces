@@ -19,13 +19,18 @@ from molmo_spaces.configs.camera_configs import (
     FrankaDroidCameraSystem,
     FrankaRandomizedD405D455CameraSystem,
     MjcfCameraConfig,
+    PandaOmronCameraSystem,
     RandomizedExocentricCameraConfig,
     RBY1GoProD455CameraSystem,
     RBY1MjcfCameraSystem,
     RobotMountedCameraConfig,
 )
 from molmo_spaces.configs.policy_configs import BasePolicyConfig
-from molmo_spaces.configs.robot_configs import BaseRobotConfig, FrankaRobotConfig
+from molmo_spaces.configs.robot_configs import (
+    BaseRobotConfig,
+    FrankaRobotConfig,
+    PandaOmronRobotConfig,
+)
 from molmo_spaces.configs.task_configs import BaseMujocoTaskConfig, PickTaskConfig
 from molmo_spaces.configs.task_sampler_configs import (
     BaseMujocoTaskSamplerConfig,
@@ -39,6 +44,7 @@ __all__ = [
     "CameraSystemConfig",
     "CameraConfig",
     "MjcfCameraConfig",
+    "PandaOmronCameraSystem",
     "RobotMountedCameraConfig",
     "FixedExocentricCameraConfig",
     "RandomizedExocentricCameraConfig",
@@ -49,6 +55,7 @@ __all__ = [
     # Robot configs
     "BaseRobotConfig",
     "FrankaRobotConfig",
+    "PandaOmronRobotConfig",
     # Task configs
     "BaseMujocoTaskConfig",
     "PickTaskConfig",

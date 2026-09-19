@@ -1,0 +1,14 @@
+<mujoco model="reachability_minimal">
+  <compiler angle="radian"/>
+
+  <worldbody>
+    <geom name="floor" size="5 5 0.1" type="plane" rgba="0.8 0.8 0.8 1"/>
+    <body name="table">
+      <geom name="table_top" size="0.8 0.6 0.05" pos="0 0 0.75" type="box" rgba="0.55 0.35 0.2 1"/>
+    </body>
+    <body name="target" pos="0.45 0 0.9">
+      <joint name="target_freejoint" type="free"/>
+      <geom name="target_geom" size="0.04 0.08" type="cylinder" mass="0.2" rgba="0.9 0.2 0.2 1"/>
+    </body>
+  </worldbody>
+</mujoco>

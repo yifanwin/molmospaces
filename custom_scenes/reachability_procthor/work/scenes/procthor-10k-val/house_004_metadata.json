@@ -1,0 +1,1437 @@
+{
+  "objects": {
+    "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_0_4": {
+      "hash_name": "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_0_4",
+      "asset_id": "Doorway_7",
+      "object_id": "door|4|5",
+      "category": "Doorway",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_0_4": "Doorway_7",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_1_4": "Doorway_7_doorway_7",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_2_4": "Doorway_7_doorway_door_7",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_3_4": "Doorway_7_doorway_handle_7"
+        },
+        "joints": {
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_2_4_doorwaydoor7joint0_0": "Doorway_7_doorway_door_7_joint_0",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_1_3_4_doorwayhandle7joint0_1": "Doorway_7_doorway_handle_7_joint_0"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": []
+    },
+    "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_0_4": {
+      "hash_name": "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_0_4",
+      "asset_id": "Doorway_7",
+      "object_id": "door|4|7",
+      "category": "Doorway",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_0_4": "Doorway_7",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_1_4": "Doorway_7_doorway_7",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_2_4": "Doorway_7_doorway_door_7",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_3_4": "Doorway_7_doorway_handle_7"
+        },
+        "joints": {
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_2_4_doorwaydoor7joint0_0": "Doorway_7_doorway_door_7_joint_0",
+          "doorway_06578a8f61a612b28999ce2f14b6e2c7_2_3_4_doorwayhandle7joint0_1": "Doorway_7_doorway_handle_7_joint_0"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": []
+    },
+    "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_0_1": {
+      "hash_name": "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_0_1",
+      "asset_id": "Doorway_1",
+      "object_id": "door|1|6",
+      "category": "Doorway",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_0_1": "Doorway_1",
+          "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_1_1": "Doorway_1_doorway_1",
+          "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_2_1": "Doorway_1_doorway_door_1",
+          "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_3_1": "Doorway_1_doorway_handle_1"
+        },
+        "joints": {
+          "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_2_1_doorwaydoor1joint0_0": "Doorway_1_doorway_door_1_joint_0",
+          "doorway_fee6ea5c4766fbf3fb30edadd9ddd22a_1_3_1_doorwayhandle1joint0_1": "Doorway_1_doorway_handle_1_joint_0"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 1,
+      "children": []
+    },
+    "window_8d46bf775284cf92b31bf5fe02ddd4b4_1_0_4": {
+      "hash_name": "window_8d46bf775284cf92b31bf5fe02ddd4b4_1_0_4",
+      "asset_id": "Window_Slider_60x48",
+      "object_id": "window|4|0",
+      "category": "Window",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "window_8d46bf775284cf92b31bf5fe02ddd4b4_1_0_4": "Window_Slider_60x48",
+          "window_8d46bf775284cf92b31bf5fe02ddd4b4_1_1_4": "Window_Slider_60x48_window_slider_60x48"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": []
+    },
+    "window_5b3f859afe988574e557d29d8968f158_1_0_7": {
+      "hash_name": "window_5b3f859afe988574e557d29d8968f158_1_0_7",
+      "asset_id": "Window_Bay_1",
+      "object_id": "window|7|0",
+      "category": "Window",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "window_5b3f859afe988574e557d29d8968f158_1_0_7": "Window_Bay_1",
+          "window_5b3f859afe988574e557d29d8968f158_1_1_7": "Window_Bay_1_window_bay_1"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 7,
+      "children": []
+    },
+    "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4": {
+      "hash_name": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4",
+      "asset_id": "Bed_16",
+      "object_id": "Bed|4|0|0",
+      "category": "Bed",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4": "Bed_16",
+          "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_1_4": "Bed_16_bed_16",
+          "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_2_4": "Bed_16_bed_mattress_16",
+          "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_3_4": "Bed_16_bedsheet_unmade_1"
+        },
+        "joints": {},
+        "sites": {
+          "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_1_4_bed16ReceptacleCollider0_0": "Bed_16_bed_16_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": [
+        "pillow_c2e5b74c90bcaa6874a328cb6ef4cd0e_1_0_4",
+        "pillow_c2e5b74c90bcaa6874a328cb6ef4cd0e_2_0_4",
+        "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_0_4"
+      ]
+    },
+    "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_0_4": {
+      "hash_name": "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_0_4",
+      "asset_id": "Laptop_30",
+      "object_id": "Laptop|surface|4|0",
+      "category": "Laptop",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_0_4": "Laptop_30",
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_1_4": "Laptop_30_laptop_30",
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_2_4": "Laptop_30_laptop_lid_30"
+        },
+        "joints": {
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_0_4_jntfree_0": "Laptop_30_free",
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_1_2_4_laptoplid30joint0_1": "Laptop_30_laptop_lid_30_joint_0"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4",
+      "room_id": 4,
+      "children": []
+    },
+    "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_0_4": {
+      "hash_name": "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_0_4",
+      "asset_id": "Dresser_220_1",
+      "object_id": "Dresser|4|1",
+      "category": "Dresser",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_0_4": "Dresser_220_1",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_1_4": "Dresser_220_1_DresserMesh",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_2_4": "Dresser_220_1_DrawerMesh_01",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_3_4": "Dresser_220_1_handle_2_600mm_01",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_4_4": "Dresser_220_1_DrawerMesh_02",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_5_4": "Dresser_220_1_handle_2_600mm_02",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_6_4": "Dresser_220_1_DrawerMesh_03",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_7_4": "Dresser_220_1_handle_2_600mm_03",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_8_4": "Dresser_220_1_DrawerMesh_04",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_9_4": "Dresser_220_1_handle_2_600mm_04"
+        },
+        "joints": {
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_2_4_joint_0": "Dresser_220_1_joint",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_4_4_DrawerMesh021_1": "Dresser_220_1_DrawerMesh_02__1",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_6_4_DrawerMesh031_2": "Dresser_220_1_DrawerMesh_03__1",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_8_4_DrawerMesh041_3": "Dresser_220_1_DrawerMesh_04__1"
+        },
+        "sites": {
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_1_4_DresserMeshReceptacle0_0": "Dresser_220_1_DresserMesh_Receptacle_0",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_2_4_DrawerMesh01Receptacle0_1": "Dresser_220_1_DrawerMesh_01_Receptacle_0",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_4_4_DrawerMesh02Receptacle0_2": "Dresser_220_1_DrawerMesh_02_Receptacle_0",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_6_4_DrawerMesh03Receptacle0_3": "Dresser_220_1_DrawerMesh_03_Receptacle_0",
+          "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_8_4_DrawerMesh04Receptacle0_4": "Dresser_220_1_DrawerMesh_04_Receptacle_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": [
+        "remotecontrol_488ea7924f7cb4d329c991926df62222_1_0_4"
+      ]
+    },
+    "remotecontrol_488ea7924f7cb4d329c991926df62222_1_0_4": {
+      "hash_name": "remotecontrol_488ea7924f7cb4d329c991926df62222_1_0_4",
+      "asset_id": "RoboTHOR_remote_coolux_v",
+      "object_id": "RemoteControl|surface|4|2",
+      "category": "RemoteControl",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "remotecontrol_488ea7924f7cb4d329c991926df62222_1_0_4": "RoboTHOR_remote_coolux_v",
+          "remotecontrol_488ea7924f7cb4d329c991926df62222_1_1_4": "RoboTHOR_remote_coolux_v_robothor_remote_coolux"
+        },
+        "joints": {
+          "remotecontrol_488ea7924f7cb4d329c991926df62222_1_0_4_jntfree_0": "RoboTHOR_remote_coolux_v_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_0_4",
+      "room_id": 4,
+      "children": []
+    },
+    "box_7c54a26cba93093ca8aceb6fbac82646_1_0_4": {
+      "hash_name": "box_7c54a26cba93093ca8aceb6fbac82646_1_0_4",
+      "asset_id": "Box_10",
+      "object_id": "Box|4|2",
+      "category": "Box",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_0_4": "Box_10",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_1_4": "Box_10_box_10_flap_inner_1",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_2_4": "Box_10_box_10",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_3_4": "Box_10_box_10_flap_inner_2",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_4_4": "Box_10_box_10_flap_outer_1",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_5_4": "Box_10_box_10_flap_outer_2"
+        },
+        "joints": {
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_0_4_jntfree_0": "Box_10_free",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_1_4_box10flapinner1joint0_1": "Box_10_box_10_flap_inner_1_joint_0",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_3_4_box10flapinner2joint0_2": "Box_10_box_10_flap_inner_2_joint_0",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_4_4_box10flapouter1joint0_3": "Box_10_box_10_flap_outer_1_joint_0",
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_5_4_box10flapouter2joint0_4": "Box_10_box_10_flap_outer_2_joint_0"
+        },
+        "sites": {
+          "box_7c54a26cba93093ca8aceb6fbac82646_1_2_4_box10ReceptacleCollider0_0": "Box_10_box_10_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": [
+        "pencil_871b1f13539d25a379dac1c4f20e3fae_1_0_4"
+      ]
+    },
+    "pencil_871b1f13539d25a379dac1c4f20e3fae_1_0_4": {
+      "hash_name": "pencil_871b1f13539d25a379dac1c4f20e3fae_1_0_4",
+      "asset_id": "Pencil_1",
+      "object_id": "Pencil|surface|4|1",
+      "category": "Pencil",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "pencil_871b1f13539d25a379dac1c4f20e3fae_1_0_4": "Pencil_1",
+          "pencil_871b1f13539d25a379dac1c4f20e3fae_1_1_4": "Pencil_1_Cylinder.224"
+        },
+        "joints": {
+          "pencil_871b1f13539d25a379dac1c4f20e3fae_1_0_4_jntfree_0": "Pencil_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "box_7c54a26cba93093ca8aceb6fbac82646_1_0_4",
+      "room_id": 4,
+      "children": []
+    },
+    "houseplant_5733d35e6806afced99ad7586d065dca_1_0_4": {
+      "hash_name": "houseplant_5733d35e6806afced99ad7586d065dca_1_0_4",
+      "asset_id": "Houseplant_16",
+      "object_id": "HousePlant|4|3|0",
+      "category": "HousePlant",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "houseplant_5733d35e6806afced99ad7586d065dca_1_0_4": "Houseplant_16",
+          "houseplant_5733d35e6806afced99ad7586d065dca_1_1_4": "Houseplant_16_houseplant_16"
+        },
+        "joints": {
+          "houseplant_5733d35e6806afced99ad7586d065dca_1_0_4_jntfree_0": "Houseplant_16_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": []
+    },
+    "basketball_13f63d02d4de4b9acc00b38afd72266b_1_0_4": {
+      "hash_name": "basketball_13f63d02d4de4b9acc00b38afd72266b_1_0_4",
+      "asset_id": "Basketball_1",
+      "object_id": "BasketBall|4|4",
+      "category": "BasketBall",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "basketball_13f63d02d4de4b9acc00b38afd72266b_1_0_4": "Basketball_1",
+          "basketball_13f63d02d4de4b9acc00b38afd72266b_1_1_4": "Basketball_1_Sphere.114"
+        },
+        "joints": {
+          "basketball_13f63d02d4de4b9acc00b38afd72266b_1_0_4_jntfree_0": "Basketball_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 4,
+      "children": []
+    },
+    "crapper_5e2d12397acf889e9a50a7377fe2679d_1_0_5": {
+      "hash_name": "crapper_5e2d12397acf889e9a50a7377fe2679d_1_0_5",
+      "asset_id": "Toilet_2",
+      "object_id": "Toilet|5|0",
+      "category": "Toilet",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "crapper_5e2d12397acf889e9a50a7377fe2679d_1_0_5": "Toilet_2",
+          "crapper_5e2d12397acf889e9a50a7377fe2679d_1_1_5": "Toilet_2_FP403:Base8",
+          "crapper_5e2d12397acf889e9a50a7377fe2679d_1_2_5": "Toilet_2_FP403:Lid"
+        },
+        "joints": {},
+        "sites": {
+          "crapper_5e2d12397acf889e9a50a7377fe2679d_1_1_5_FP403:Base8ReceptacleCollider0_0": "Toilet_2_FP403:Base8_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": [
+        "atomizer_f2c2791e460c41f03b6d3f28fbad8f2c_1_0_5"
+      ]
+    },
+    "atomizer_f2c2791e460c41f03b6d3f28fbad8f2c_1_0_5": {
+      "hash_name": "atomizer_f2c2791e460c41f03b6d3f28fbad8f2c_1_0_5",
+      "asset_id": "RoboTHOR_spray_bottle_kramig_v",
+      "object_id": "SprayBottle|surface|5|3",
+      "category": "SprayBottle",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "atomizer_f2c2791e460c41f03b6d3f28fbad8f2c_1_0_5": "RoboTHOR_spray_bottle_kramig_v",
+          "atomizer_f2c2791e460c41f03b6d3f28fbad8f2c_1_1_5": "RoboTHOR_spray_bottle_kramig_v_robothor_spray_bottle_kramig"
+        },
+        "joints": {
+          "atomizer_f2c2791e460c41f03b6d3f28fbad8f2c_1_0_5_jntfree_0": "RoboTHOR_spray_bottle_kramig_v_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "crapper_5e2d12397acf889e9a50a7377fe2679d_1_0_5",
+      "room_id": 5,
+      "children": []
+    },
+    "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5": {
+      "hash_name": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+      "asset_id": "Sink_1",
+      "object_id": "Sink|5|1|0",
+      "category": "Sink",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5": "Sink_1",
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_1_5": "Sink_1_sinkmesh"
+        },
+        "joints": {},
+        "sites": {
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_1_5_sinkmeshReceptacle0_0": "Sink_1_sinkmesh_Receptacle_0",
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_1_5_sinkmeshReceptacle1_1": "Sink_1_sinkmesh_Receptacle_1",
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_1_5_sinkmeshReceptacle2_2": "Sink_1_sinkmesh_Receptacle_2",
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_1_5_sinkmeshReceptacle3_3": "Sink_1_sinkmesh_Receptacle_3",
+          "sink_07e796f32d0d3efce9acf4be00f3bc53_1_1_5_sinkmeshReceptacle4_4": "Sink_1_sinkmesh_Receptacle_4"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": [
+        "faucet_618730968e7c108ebb3958a5801b6290_1_0_5"
+      ]
+    },
+    "faucet_618730968e7c108ebb3958a5801b6290_1_0_5": {
+      "hash_name": "faucet_618730968e7c108ebb3958a5801b6290_1_0_5",
+      "asset_id": "Bathroom_Faucet_28",
+      "object_id": "Faucet|5|1|1",
+      "category": "Faucet",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "faucet_618730968e7c108ebb3958a5801b6290_1_0_5": "Bathroom_Faucet_28",
+          "faucet_618730968e7c108ebb3958a5801b6290_1_1_5": "Bathroom_Faucet_28_sink_faucet_l_28",
+          "faucet_618730968e7c108ebb3958a5801b6290_1_2_5": "Bathroom_Faucet_28_sink_faucet_r_28",
+          "faucet_618730968e7c108ebb3958a5801b6290_1_3_5": "Bathroom_Faucet_28_sink_faucet_knob_r_28",
+          "faucet_618730968e7c108ebb3958a5801b6290_1_4_5": "Bathroom_Faucet_28_sink_faucet_knob_l_28"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+      "room_id": 5,
+      "children": []
+    },
+    "plumber'shelper_8efdfb6cc7da7239a90962b40d0b878a_1_0_5": {
+      "hash_name": "plumber'shelper_8efdfb6cc7da7239a90962b40d0b878a_1_0_5",
+      "asset_id": "Plunger_2",
+      "object_id": "Plunger|5|2",
+      "category": "Plunger",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "plumber'shelper_8efdfb6cc7da7239a90962b40d0b878a_1_0_5": "Plunger_2",
+          "plumber'shelper_8efdfb6cc7da7239a90962b40d0b878a_1_1_5": "Plunger_2_plunger"
+        },
+        "joints": {
+          "plumber'shelper_8efdfb6cc7da7239a90962b40d0b878a_1_0_5_jntfree_0": "Plunger_2_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": []
+    },
+    "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_0_5": {
+      "hash_name": "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_0_5",
+      "asset_id": "Clothes_Dryer_1",
+      "object_id": "ClothesDryer|5|3",
+      "category": "ClothesDryer",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_0_5": "Clothes_Dryer_1",
+          "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_1_5": "Clothes_Dryer_1_clothes_dryer_1",
+          "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_2_5": "Clothes_Dryer_1_clothes_dryer_knob_1",
+          "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_3_5": "Clothes_Dryer_1_clothes_dryer_door_1"
+        },
+        "joints": {},
+        "sites": {
+          "clothesdryer_828bfc27448a0c8500c92a7744d1d540_1_1_5_clothesdryer1ReceptacleCollider0_0": "Clothes_Dryer_1_clothes_dryer_1_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": []
+    },
+    "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6": {
+      "hash_name": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "asset_id": "Countertop_L_6x8",
+      "object_id": "CounterTop|6|0",
+      "category": "CounterTop",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6": "Countertop_L_6x8",
+          "countertop_9609aa6850542b3b89aedcae903246f5_1_1_6": "Countertop_L_6x8_countertop_l_6x8"
+        },
+        "joints": {},
+        "sites": {
+          "countertop_9609aa6850542b3b89aedcae903246f5_1_1_6_countertopl6x8ReceptacleCollider0_0": "Countertop_L_6x8_countertop_l_6x8_ReceptacleCollider_0",
+          "countertop_9609aa6850542b3b89aedcae903246f5_1_1_6_countertopl6x8ReceptacleCollider1_1": "Countertop_L_6x8_countertop_l_6x8_ReceptacleCollider_1"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": [
+        "lettuce_4cd05ba168046bcdb611003af5165da0_1_0_6",
+        "knife_79fd11da07e86802ec5235db6beee9a8_1_0_6",
+        "knife_d1a1d17c285fd8977f4a313d2a06c8e2_1_0_6",
+        "houseplant_6f581d48d93286f579c4bc0346d0330d_1_0_6",
+        "Irishpotato_c2491e800077344d1bc0450a4a6af844_1_0_6",
+        "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_6"
+      ]
+    },
+    "lettuce_4cd05ba168046bcdb611003af5165da0_1_0_6": {
+      "hash_name": "lettuce_4cd05ba168046bcdb611003af5165da0_1_0_6",
+      "asset_id": "Lettuce_17",
+      "object_id": "Lettuce|surface|6|6",
+      "category": "Lettuce",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "lettuce_4cd05ba168046bcdb611003af5165da0_1_0_6": "Lettuce_17",
+          "lettuce_4cd05ba168046bcdb611003af5165da0_1_1_6": "Lettuce_17_lettuce_b7"
+        },
+        "joints": {
+          "lettuce_4cd05ba168046bcdb611003af5165da0_1_0_6_jntfree_0": "Lettuce_17_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "knife_79fd11da07e86802ec5235db6beee9a8_1_0_6": {
+      "hash_name": "knife_79fd11da07e86802ec5235db6beee9a8_1_0_6",
+      "asset_id": "Knife_6",
+      "object_id": "Knife|surface|6|8",
+      "category": "Knife",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "knife_79fd11da07e86802ec5235db6beee9a8_1_0_6": "Knife_6",
+          "knife_79fd11da07e86802ec5235db6beee9a8_1_1_6": "Knife_6_Cube.002"
+        },
+        "joints": {
+          "knife_79fd11da07e86802ec5235db6beee9a8_1_0_6_jntfree_0": "Knife_6_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "knife_d1a1d17c285fd8977f4a313d2a06c8e2_1_0_6": {
+      "hash_name": "knife_d1a1d17c285fd8977f4a313d2a06c8e2_1_0_6",
+      "asset_id": "Knife_1",
+      "object_id": "Knife|surface|6|9",
+      "category": "Knife",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "knife_d1a1d17c285fd8977f4a313d2a06c8e2_1_0_6": "Knife_1",
+          "knife_d1a1d17c285fd8977f4a313d2a06c8e2_1_1_6": "Knife_1_Cube.009"
+        },
+        "joints": {
+          "knife_d1a1d17c285fd8977f4a313d2a06c8e2_1_0_6_jntfree_0": "Knife_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "houseplant_6f581d48d93286f579c4bc0346d0330d_1_0_6": {
+      "hash_name": "houseplant_6f581d48d93286f579c4bc0346d0330d_1_0_6",
+      "asset_id": "Houseplant_1",
+      "object_id": "HousePlant|surface|6|14",
+      "category": "HousePlant",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "houseplant_6f581d48d93286f579c4bc0346d0330d_1_0_6": "Houseplant_1",
+          "houseplant_6f581d48d93286f579c4bc0346d0330d_1_1_6": "Houseplant_1_houseplant_1"
+        },
+        "joints": {
+          "houseplant_6f581d48d93286f579c4bc0346d0330d_1_0_6_jntfree_0": "Houseplant_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "Irishpotato_c2491e800077344d1bc0450a4a6af844_1_0_6": {
+      "hash_name": "Irishpotato_c2491e800077344d1bc0450a4a6af844_1_0_6",
+      "asset_id": "Potato_28",
+      "object_id": "Potato|surface|6|16",
+      "category": "Potato",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "Irishpotato_c2491e800077344d1bc0450a4a6af844_1_0_6": "Potato_28",
+          "Irishpotato_c2491e800077344d1bc0450a4a6af844_1_1_6": "Potato_28_potato_c8"
+        },
+        "joints": {
+          "Irishpotato_c2491e800077344d1bc0450a4a6af844_1_0_6_jntfree_0": "Potato_28_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_6": {
+      "hash_name": "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_6",
+      "asset_id": "Dish_Sponge_1",
+      "object_id": "DishSponge|surface|6|17",
+      "category": "DishSponge",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_6": "Dish_Sponge_1",
+          "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_1_6": "Dish_Sponge_1_Cube.194"
+        },
+        "joints": {
+          "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_6_jntfree_0": "Dish_Sponge_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_0_6": {
+      "hash_name": "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_0_6",
+      "asset_id": "Fridge_11",
+      "object_id": "Fridge|6|1",
+      "category": "Fridge",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_0_6": "Fridge_11",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_1_6": "Fridge_11_FridgeBodyMesh_0c84104a",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_2_6": "Fridge_11_Mesh_2544b18f",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_3_6": "Fridge_11_fridge_freezerdoor_handle_a3_aacbba73",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_4_6": "Fridge_11_Mesh_35593eb1",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_5_6": "Fridge_11_fridge_maindoor_handle_a3_4264e81c"
+        },
+        "joints": {
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_2_6_joint_0": "Fridge_11_joint",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_4_6_Mesh35593eb11_1": "Fridge_11_Mesh_35593eb1__1"
+        },
+        "sites": {
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_1_6_FridgeBodyMesh0c84104aReceptacle0_0": "Fridge_11_FridgeBodyMesh_0c84104a_Receptacle_0",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_1_6_FridgeBodyMesh0c84104aReceptacle1_1": "Fridge_11_FridgeBodyMesh_0c84104a_Receptacle_1",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_1_6_FridgeBodyMesh0c84104aReceptacle2_2": "Fridge_11_FridgeBodyMesh_0c84104a_Receptacle_2",
+          "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_1_6_FridgeBodyMesh0c84104aReceptacle3_3": "Fridge_11_FridgeBodyMesh_0c84104a_Receptacle_3"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": [
+        "egg_ab1e6b2ddd5b7baaf103230e82ce5f20_1_0_6",
+        "egg_f137dcdedb58eda5ef2acc019efa206d_1_0_6"
+      ]
+    },
+    "egg_ab1e6b2ddd5b7baaf103230e82ce5f20_1_0_6": {
+      "hash_name": "egg_ab1e6b2ddd5b7baaf103230e82ce5f20_1_0_6",
+      "asset_id": "Egg_12",
+      "object_id": "Egg|surface|6|18",
+      "category": "Egg",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "egg_ab1e6b2ddd5b7baaf103230e82ce5f20_1_0_6": "Egg_12",
+          "egg_ab1e6b2ddd5b7baaf103230e82ce5f20_1_1_6": "Egg_12_egg_12"
+        },
+        "joints": {
+          "egg_ab1e6b2ddd5b7baaf103230e82ce5f20_1_0_6_jntfree_0": "Egg_12_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "egg_f137dcdedb58eda5ef2acc019efa206d_1_0_6": {
+      "hash_name": "egg_f137dcdedb58eda5ef2acc019efa206d_1_0_6",
+      "asset_id": "Egg_1",
+      "object_id": "Egg|surface|6|19",
+      "category": "Egg",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "egg_f137dcdedb58eda5ef2acc019efa206d_1_0_6": "Egg_1",
+          "egg_f137dcdedb58eda5ef2acc019efa206d_1_1_6": "Egg_1_egg_1"
+        },
+        "joints": {
+          "egg_f137dcdedb58eda5ef2acc019efa206d_1_0_6_jntfree_0": "Egg_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "refrigerator_93040c07fdeb9b1b6ef21482e759a450_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6": {
+      "hash_name": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "asset_id": "Dining_Table_203_1",
+      "object_id": "DiningTable|6|2|0",
+      "category": "DiningTable",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6": "Dining_Table_203_1",
+          "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_1_6": "Dining_Table_203_1_dining_table_203"
+        },
+        "joints": {},
+        "sites": {
+          "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_1_6_diningtable203ReceptacleCollider0_0": "Dining_Table_203_1_dining_table_203_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": [
+        "apple_038a0ea9b393da66a161da588e6ecc2a_1_0_6",
+        "bread_ce14aa444cff8c5279772caf1fa3df7a_1_0_6",
+        "pot_8d0e6737bc33f6122dadb537b0f07d47_1_0_6",
+        "vase_492808e89eee9bf3081c206f6cb82173_1_0_6",
+        "butterknife_f211d9b5a6beb604cda0c1df985a0093_1_0_6",
+        "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_0_6",
+        "pen_6868af7336df691a6aad3bad70b207dc_1_0_6"
+      ]
+    },
+    "apple_038a0ea9b393da66a161da588e6ecc2a_1_0_6": {
+      "hash_name": "apple_038a0ea9b393da66a161da588e6ecc2a_1_0_6",
+      "asset_id": "Apple_1",
+      "object_id": "Apple|surface|6|4",
+      "category": "Apple",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "apple_038a0ea9b393da66a161da588e6ecc2a_1_0_6": "Apple_1",
+          "apple_038a0ea9b393da66a161da588e6ecc2a_1_1_6": "Apple_1_apple_a1"
+        },
+        "joints": {
+          "apple_038a0ea9b393da66a161da588e6ecc2a_1_0_6_jntfree_0": "Apple_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "bread_ce14aa444cff8c5279772caf1fa3df7a_1_0_6": {
+      "hash_name": "bread_ce14aa444cff8c5279772caf1fa3df7a_1_0_6",
+      "asset_id": "Bread_17",
+      "object_id": "Bread|surface|6|5",
+      "category": "Bread",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "bread_ce14aa444cff8c5279772caf1fa3df7a_1_0_6": "Bread_17",
+          "bread_ce14aa444cff8c5279772caf1fa3df7a_1_1_6": "Bread_17_bumpybread_b_mesh"
+        },
+        "joints": {
+          "bread_ce14aa444cff8c5279772caf1fa3df7a_1_0_6_jntfree_0": "Bread_17_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "pot_8d0e6737bc33f6122dadb537b0f07d47_1_0_6": {
+      "hash_name": "pot_8d0e6737bc33f6122dadb537b0f07d47_1_0_6",
+      "asset_id": "Pot_17",
+      "object_id": "Pot|surface|6|10",
+      "category": "Pot",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "pot_8d0e6737bc33f6122dadb537b0f07d47_1_0_6": "Pot_17",
+          "pot_8d0e6737bc33f6122dadb537b0f07d47_1_1_6": "Pot_17_pot_17"
+        },
+        "joints": {
+          "pot_8d0e6737bc33f6122dadb537b0f07d47_1_0_6_jntfree_0": "Pot_17_free"
+        },
+        "sites": {
+          "pot_8d0e6737bc33f6122dadb537b0f07d47_1_1_6_pot17ReceptacleCollider0_0": "Pot_17_pot_17_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "vase_492808e89eee9bf3081c206f6cb82173_1_0_6": {
+      "hash_name": "vase_492808e89eee9bf3081c206f6cb82173_1_0_6",
+      "asset_id": "Vase_Medium_2",
+      "object_id": "Vase|surface|6|11",
+      "category": "Vase",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "vase_492808e89eee9bf3081c206f6cb82173_1_0_6": "Vase_Medium_2",
+          "vase_492808e89eee9bf3081c206f6cb82173_1_1_6": "Vase_Medium_2_vase_medium"
+        },
+        "joints": {
+          "vase_492808e89eee9bf3081c206f6cb82173_1_0_6_jntfree_0": "Vase_Medium_2_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "butterknife_f211d9b5a6beb604cda0c1df985a0093_1_0_6": {
+      "hash_name": "butterknife_f211d9b5a6beb604cda0c1df985a0093_1_0_6",
+      "asset_id": "RoboTHOR_butter_knife_ai2_1_v",
+      "object_id": "ButterKnife|surface|6|12",
+      "category": "ButterKnife",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "butterknife_f211d9b5a6beb604cda0c1df985a0093_1_0_6": "RoboTHOR_butter_knife_ai2_1_v",
+          "butterknife_f211d9b5a6beb604cda0c1df985a0093_1_1_6": "RoboTHOR_butter_knife_ai2_1_v_robothor_butter_knife_ai2_1"
+        },
+        "joints": {
+          "butterknife_f211d9b5a6beb604cda0c1df985a0093_1_0_6_jntfree_0": "RoboTHOR_butter_knife_ai2_1_v_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_0_6": {
+      "hash_name": "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_0_6",
+      "asset_id": "Plate_28",
+      "object_id": "Plate|surface|6|13",
+      "category": "Plate",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_0_6": "Plate_28",
+          "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_1_6": "Plate_28_plate_28"
+        },
+        "joints": {
+          "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_0_6_jntfree_0": "Plate_28_free"
+        },
+        "sites": {
+          "plate_f18eaffb67be4fe9bc79cbc991a73c4b_1_1_6_plate28ReceptacleCollider0_0": "Plate_28_plate_28_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "pen_6868af7336df691a6aad3bad70b207dc_1_0_6": {
+      "hash_name": "pen_6868af7336df691a6aad3bad70b207dc_1_0_6",
+      "asset_id": "Pen_1",
+      "object_id": "Pen|surface|6|15",
+      "category": "Pen",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "pen_6868af7336df691a6aad3bad70b207dc_1_0_6": "Pen_1",
+          "pen_6868af7336df691a6aad3bad70b207dc_1_1_6": "Pen_1_Cylinder.230"
+        },
+        "joints": {
+          "pen_6868af7336df691a6aad3bad70b207dc_1_0_6_jntfree_0": "Pen_1_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_6",
+      "room_id": 6,
+      "children": []
+    },
+    "chair_94babeaee8dda9070da4df6546fa925e_1_0_6": {
+      "hash_name": "chair_94babeaee8dda9070da4df6546fa925e_1_0_6",
+      "asset_id": "Chair_204_6",
+      "object_id": "Chair|6|2|1",
+      "category": "Chair",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "chair_94babeaee8dda9070da4df6546fa925e_1_0_6": "Chair_204_6",
+          "chair_94babeaee8dda9070da4df6546fa925e_1_1_6": "Chair_204_6_chair_204"
+        },
+        "joints": {},
+        "sites": {
+          "chair_94babeaee8dda9070da4df6546fa925e_1_1_6_chair204ReceptacleCollider0_0": "Chair_204_6_chair_204_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": []
+    },
+    "chair_94babeaee8dda9070da4df6546fa925e_2_0_6": {
+      "hash_name": "chair_94babeaee8dda9070da4df6546fa925e_2_0_6",
+      "asset_id": "Chair_204_6",
+      "object_id": "Chair|6|2|2",
+      "category": "Chair",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "chair_94babeaee8dda9070da4df6546fa925e_2_0_6": "Chair_204_6",
+          "chair_94babeaee8dda9070da4df6546fa925e_2_1_6": "Chair_204_6_chair_204"
+        },
+        "joints": {},
+        "sites": {
+          "chair_94babeaee8dda9070da4df6546fa925e_2_1_6_chair204ReceptacleCollider0_0": "Chair_204_6_chair_204_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": []
+    },
+    "chair_94babeaee8dda9070da4df6546fa925e_3_0_6": {
+      "hash_name": "chair_94babeaee8dda9070da4df6546fa925e_3_0_6",
+      "asset_id": "Chair_204_6",
+      "object_id": "Chair|6|2|3",
+      "category": "Chair",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "chair_94babeaee8dda9070da4df6546fa925e_3_0_6": "Chair_204_6",
+          "chair_94babeaee8dda9070da4df6546fa925e_3_1_6": "Chair_204_6_chair_204"
+        },
+        "joints": {},
+        "sites": {
+          "chair_94babeaee8dda9070da4df6546fa925e_3_1_6_chair204ReceptacleCollider0_0": "Chair_204_6_chair_204_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": []
+    },
+    "stool_405b491fbc2c8a8c402d1f3607ae9cd6_1_0_6": {
+      "hash_name": "stool_405b491fbc2c8a8c402d1f3607ae9cd6_1_0_6",
+      "asset_id": "Stool_1_1",
+      "object_id": "Stool|6|3",
+      "category": "Stool",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "stool_405b491fbc2c8a8c402d1f3607ae9cd6_1_0_6": "Stool_1_1",
+          "stool_405b491fbc2c8a8c402d1f3607ae9cd6_1_1_6": "Stool_1_1_stool_1"
+        },
+        "joints": {
+          "stool_405b491fbc2c8a8c402d1f3607ae9cd6_1_0_6_jntfree_0": "Stool_1_1_free"
+        },
+        "sites": {
+          "stool_405b491fbc2c8a8c402d1f3607ae9cd6_1_1_6_stool1ReceptacleCollider0_0": "Stool_1_1_stool_1_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": []
+    },
+    "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7": {
+      "hash_name": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "asset_id": "Dining_Table_16_1",
+      "object_id": "DiningTable|7|0",
+      "category": "DiningTable",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7": "Dining_Table_16_1",
+          "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_1_7": "Dining_Table_16_1_dining_table_016"
+        },
+        "joints": {},
+        "sites": {
+          "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_1_7_diningtable016ReceptacleCollider0_0": "Dining_Table_16_1_dining_table_016_ReceptacleCollider_0",
+          "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_1_7_diningtable016ReceptacleCollider1_1": "Dining_Table_16_1_dining_table_016_ReceptacleCollider_1",
+          "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_1_7_diningtable016ReceptacleCollider2_2": "Dining_Table_16_1_dining_table_016_ReceptacleCollider_2",
+          "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_1_7_diningtable016ReceptacleCollider3_3": "Dining_Table_16_1_dining_table_016_ReceptacleCollider_3"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 7,
+      "children": [
+        "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_7",
+        "newspaper_32e8aa82f950c83054787a8099d14cf0_1_0_7",
+        "statue_0a86051042b98578ac32ddc01a447389_1_0_7",
+        "plate_ac6a1b74f35572c9a1a82922f273449a_1_0_7",
+        "pen_4d17f13875116fae2c6b573c6744bf41_1_0_7",
+        "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_0_7"
+      ]
+    },
+    "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_7": {
+      "hash_name": "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_7",
+      "asset_id": "Bowl_12",
+      "object_id": "Bowl|surface|7|20",
+      "category": "Bowl",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_7": "Bowl_12",
+          "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_1_7": "Bowl_12_bowl_12"
+        },
+        "joints": {
+          "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_7_jntfree_0": "Bowl_12_free"
+        },
+        "sites": {
+          "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_1_7_bowl12ReceptacleCollider0_0": "Bowl_12_bowl_12_ReceptacleCollider_0",
+          "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_1_7_bowl12ReceptacleCollider1_1": "Bowl_12_bowl_12_ReceptacleCollider_1"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "newspaper_32e8aa82f950c83054787a8099d14cf0_1_0_7": {
+      "hash_name": "newspaper_32e8aa82f950c83054787a8099d14cf0_1_0_7",
+      "asset_id": "Newspaper_3",
+      "object_id": "Newspaper|surface|7|22",
+      "category": "Newspaper",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "newspaper_32e8aa82f950c83054787a8099d14cf0_1_0_7": "Newspaper_3",
+          "newspaper_32e8aa82f950c83054787a8099d14cf0_1_1_7": "Newspaper_3_Cylinder.042"
+        },
+        "joints": {
+          "newspaper_32e8aa82f950c83054787a8099d14cf0_1_0_7_jntfree_0": "Newspaper_3_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "statue_0a86051042b98578ac32ddc01a447389_1_0_7": {
+      "hash_name": "statue_0a86051042b98578ac32ddc01a447389_1_0_7",
+      "asset_id": "Hand_Statue_2",
+      "object_id": "Statue|surface|7|23",
+      "category": "Statue",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "statue_0a86051042b98578ac32ddc01a447389_1_0_7": "Hand_Statue_2",
+          "statue_0a86051042b98578ac32ddc01a447389_1_1_7": "Hand_Statue_2_hand_statue"
+        },
+        "joints": {
+          "statue_0a86051042b98578ac32ddc01a447389_1_0_7_jntfree_0": "Hand_Statue_2_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "plate_ac6a1b74f35572c9a1a82922f273449a_1_0_7": {
+      "hash_name": "plate_ac6a1b74f35572c9a1a82922f273449a_1_0_7",
+      "asset_id": "Plate_17",
+      "object_id": "Plate|surface|7|25",
+      "category": "Plate",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "plate_ac6a1b74f35572c9a1a82922f273449a_1_0_7": "Plate_17",
+          "plate_ac6a1b74f35572c9a1a82922f273449a_1_1_7": "Plate_17_plate_17"
+        },
+        "joints": {
+          "plate_ac6a1b74f35572c9a1a82922f273449a_1_0_7_jntfree_0": "Plate_17_free"
+        },
+        "sites": {
+          "plate_ac6a1b74f35572c9a1a82922f273449a_1_1_7_plate17ReceptacleCollider0_0": "Plate_17_plate_17_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "pen_4d17f13875116fae2c6b573c6744bf41_1_0_7": {
+      "hash_name": "pen_4d17f13875116fae2c6b573c6744bf41_1_0_7",
+      "asset_id": "Pen_3",
+      "object_id": "Pen|surface|7|26",
+      "category": "Pen",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "pen_4d17f13875116fae2c6b573c6744bf41_1_0_7": "Pen_3",
+          "pen_4d17f13875116fae2c6b573c6744bf41_1_1_7": "Pen_3_Cylinder.232"
+        },
+        "joints": {
+          "pen_4d17f13875116fae2c6b573c6744bf41_1_0_7_jntfree_0": "Pen_3_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_0_7": {
+      "hash_name": "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_0_7",
+      "asset_id": "Laptop_30",
+      "object_id": "Laptop|surface|7|27",
+      "category": "Laptop",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_0_7": "Laptop_30",
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_1_7": "Laptop_30_laptop_30",
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_2_7": "Laptop_30_laptop_lid_30"
+        },
+        "joints": {
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_0_7_jntfree_0": "Laptop_30_free",
+          "laptop_27a4fcb4cfe06b0047a9ea5570b09033_2_2_7_laptoplid30joint0_1": "Laptop_30_laptop_lid_30_joint_0"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "diningtable_42d3dec851300e8a28218e4c383cb4eb_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "sofa_bbf81ac9d8b7de78c937f47d9da7ff69_1_0_7": {
+      "hash_name": "sofa_bbf81ac9d8b7de78c937f47d9da7ff69_1_0_7",
+      "asset_id": "Sofa_201_3",
+      "object_id": "Sofa|7|1",
+      "category": "Sofa",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "sofa_bbf81ac9d8b7de78c937f47d9da7ff69_1_0_7": "Sofa_201_3",
+          "sofa_bbf81ac9d8b7de78c937f47d9da7ff69_1_1_7": "Sofa_201_3_sofa_201"
+        },
+        "joints": {},
+        "sites": {
+          "sofa_bbf81ac9d8b7de78c937f47d9da7ff69_1_1_7_sofa201ReceptacleCollider0_0": "Sofa_201_3_sofa_201_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 7,
+      "children": [
+        "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_7",
+        "pillow_6afe3635cad7781073478ce57191cfc3_1_0_7"
+      ]
+    },
+    "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_7": {
+      "hash_name": "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_7",
+      "asset_id": "Remote_2",
+      "object_id": "RemoteControl|surface|7|21",
+      "category": "RemoteControl",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_7": "Remote_2",
+          "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_1_7": "Remote_2_RemoteBody2",
+          "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_2_7": "Remote_2_RemoteButtons2"
+        },
+        "joints": {
+          "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_7_jntfree_0": "Remote_2_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "sofa_bbf81ac9d8b7de78c937f47d9da7ff69_1_0_7",
+      "room_id": 7,
+      "children": []
+    },
+    "box_99992203579ebcc1c3794f83f3a3cbe3_1_0_7": {
+      "hash_name": "box_99992203579ebcc1c3794f83f3a3cbe3_1_0_7",
+      "asset_id": "Box_25",
+      "object_id": "Box|7|2",
+      "category": "Box",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_0_7": "Box_25",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_1_7": "Box_25_box_25_flap_outer_2",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_2_7": "Box_25_box_25_flap_inner_1",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_3_7": "Box_25_box_25",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_4_7": "Box_25_box_25_flap_inner_2",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_5_7": "Box_25_box_25_flap_outer_1"
+        },
+        "joints": {
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_0_7_jntfree_0": "Box_25_free",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_1_7_box25flapouter2joint0_1": "Box_25_box_25_flap_outer_2_joint_0",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_2_7_box25flapinner1joint0_2": "Box_25_box_25_flap_inner_1_joint_0",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_4_7_box25flapinner2joint0_3": "Box_25_box_25_flap_inner_2_joint_0",
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_5_7_box25flapouter1joint0_4": "Box_25_box_25_flap_outer_1_joint_0"
+        },
+        "sites": {
+          "box_99992203579ebcc1c3794f83f3a3cbe3_1_3_7_box25ReceptacleCollider0_0": "Box_25_box_25_ReceptacleCollider_0"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 7,
+      "children": []
+    },
+    "ashcan_88188e90d2092f473c4fde30b080b547_1_0_7": {
+      "hash_name": "ashcan_88188e90d2092f473c4fde30b080b547_1_0_7",
+      "asset_id": "bin_27",
+      "object_id": "GarbageCan|7|3",
+      "category": "GarbageCan",
+      "object_enum": "thor_obj",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_0_7": "bin_27",
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_1_7": "bin_27_bin_27"
+        },
+        "joints": {
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_0_7_jntfree_0": "bin_27_free"
+        },
+        "sites": {
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_1_7_ReceptacleCollider0_0": "bin_27_bin_27_ReceptacleCollider_0",
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_1_7_ReceptacleCollider1_1": "bin_27_bin_27_ReceptacleCollider_1",
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_1_7_ReceptacleCollider2_2": "bin_27_bin_27_ReceptacleCollider_2",
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_1_7_ReceptacleCollider3_3": "bin_27_bin_27_ReceptacleCollider_3",
+          "ashcan_88188e90d2092f473c4fde30b080b547_1_1_7_ReceptacleCollider4_4": "bin_27_bin_27_ReceptacleCollider_4"
+        }
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 7,
+      "children": []
+    },
+    "television_c24f5fe0ccf177fc988c02b0f759df51_1_0_6": {
+      "hash_name": "television_c24f5fe0ccf177fc988c02b0f759df51_1_0_6",
+      "asset_id": "Television_9",
+      "object_id": "Television|6|4",
+      "category": "Television",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "television_c24f5fe0ccf177fc988c02b0f759df51_1_0_6": "Television_9",
+          "television_c24f5fe0ccf177fc988c02b0f759df51_1_1_6": "Television_9_television_9"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": []
+    },
+    "television_daac415af139c138c3c3fd2e45c0c29d_1_0_7": {
+      "hash_name": "television_daac415af139c138c3c3fd2e45c0c29d_1_0_7",
+      "asset_id": "Television_16",
+      "object_id": "Television|7|4",
+      "category": "Television",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "television_daac415af139c138c3c3fd2e45c0c29d_1_0_7": "Television_16",
+          "television_daac415af139c138c3c3fd2e45c0c29d_1_1_7": "Television_16_television_16"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 7,
+      "children": []
+    },
+    "painting_2fadc8a087d27bd08324b014015c8ee8_1_0_5": {
+      "hash_name": "painting_2fadc8a087d27bd08324b014015c8ee8_1_0_5",
+      "asset_id": "Wall_Decor_Photo_4",
+      "object_id": "Painting|5|4",
+      "category": "Painting",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "painting_2fadc8a087d27bd08324b014015c8ee8_1_0_5": "Wall_Decor_Photo_4",
+          "painting_2fadc8a087d27bd08324b014015c8ee8_1_1_5": "Wall_Decor_Photo_4_robothor_wall_decor_inset_3_4"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": []
+    },
+    "painting_c38a9573c36ba5fc83b9b95f4cbdcdc5_1_0_5": {
+      "hash_name": "painting_c38a9573c36ba5fc83b9b95f4cbdcdc5_1_0_5",
+      "asset_id": "Wall_Decor_Painting_4",
+      "object_id": "Painting|5|5",
+      "category": "Painting",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "painting_c38a9573c36ba5fc83b9b95f4cbdcdc5_1_0_5": "Wall_Decor_Painting_4",
+          "painting_c38a9573c36ba5fc83b9b95f4cbdcdc5_1_1_5": "Wall_Decor_Painting_4_robothor_wall_decor_16_9"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": []
+    },
+    "painting_3644e8fd7b899607deac002b104d0279_1_0_5": {
+      "hash_name": "painting_3644e8fd7b899607deac002b104d0279_1_0_5",
+      "asset_id": "Wall_Decor_Painting_1",
+      "object_id": "Painting|5|6",
+      "category": "Painting",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "painting_3644e8fd7b899607deac002b104d0279_1_0_5": "Wall_Decor_Painting_1",
+          "painting_3644e8fd7b899607deac002b104d0279_1_1_5": "Wall_Decor_Painting_1_robothor_wall_decor_inset_1_1"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": []
+    },
+    "painting_508b8affb85042d8d13de253f5265b51_1_0_5": {
+      "hash_name": "painting_508b8affb85042d8d13de253f5265b51_1_0_5",
+      "asset_id": "Wall_Decor_Painting_2",
+      "object_id": "Painting|5|7",
+      "category": "Painting",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "painting_508b8affb85042d8d13de253f5265b51_1_0_5": "Wall_Decor_Painting_2",
+          "painting_508b8affb85042d8d13de253f5265b51_1_1_5": "Wall_Decor_Painting_2_robothor_wall_decor_16_9"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 5,
+      "children": []
+    },
+    "painting_e44ef25594367d4cfb28f0a6a5de9089_1_0_6": {
+      "hash_name": "painting_e44ef25594367d4cfb28f0a6a5de9089_1_0_6",
+      "asset_id": "Wall_Decor_Painting_5",
+      "object_id": "Painting|6|5",
+      "category": "Painting",
+      "object_enum": "thor_obj",
+      "is_static": true,
+      "name_map": {
+        "bodies": {
+          "painting_e44ef25594367d4cfb28f0a6a5de9089_1_0_6": "Wall_Decor_Painting_5",
+          "painting_e44ef25594367d4cfb28f0a6a5de9089_1_1_6": "Wall_Decor_Painting_5_robothor_wall_decor_16_9"
+        },
+        "joints": {},
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": "",
+      "room_id": 6,
+      "children": []
+    },
+    "custom_target_cup": {
+      "hash_name": "custom_target_cup",
+      "asset_id": "target_cup",
+      "object_id": "target_cup",
+      "category": "Cup",
+      "object_enum": "custom",
+      "is_static": false,
+      "name_map": {
+        "bodies": {
+          "custom_target_cup": "target_cup"
+        },
+        "joints": {
+          "custom_target_cup_free": "target_cup_free"
+        },
+        "sites": {}
+      },
+      "mjcf_path": "",
+      "parent": null,
+      "room_id": null,
+      "children": []
+    }
+  }
+}

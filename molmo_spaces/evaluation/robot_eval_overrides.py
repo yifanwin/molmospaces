@@ -1,3 +1,4 @@
+import copy
 import logging
 from collections.abc import Callable
 
@@ -5,7 +6,11 @@ from scipy.spatial.transform import Rotation as R
 
 from molmo_spaces.configs.abstract_exp_config import MlSpacesExpConfig
 from molmo_spaces.configs.camera_configs import MjcfCameraConfig
-from molmo_spaces.configs.robot_configs import BaseRobotConfig, FrankaCAPRobotConfig
+from molmo_spaces.configs.robot_configs import (
+    BaseRobotConfig,
+    FrankaCAPRobotConfig,
+    PandaOmronRobotConfig,
+)
 from molmo_spaces.evaluation.benchmark_schema import EpisodeSpec
 
 log = logging.getLogger(__name__)
@@ -48,8 +53,26 @@ def cap_robot_eval_override(
     }
 
 
+def panda_omron_robot_eval_override(
+    episode_spec: EpisodeSpec,
+    exp_config: MlSpacesExpConfig,
+) -> None:
+    """Replace robot-specific RBY1 episode state with PandaOmron state."""
+    log.info("Applying PandaOmron cross-robot evaluation overrides")
+    episode_spec.robot.robot_name = exp_config.robot_config.name
+    episode_spec.robot.init_qpos = copy.deepcopy(exp_config.robot_config.init_qpos)
+    exp_config.eval_runtime_params.use_config_camera_system = True
+    # A benchmark base pose is only valid for the footprint and root-frame
+    # convention of the robot that generated it. PandaOmron is substantially
+    # wider than Franka/RBY1, so replaying that pose verbatim often intersects
+    # walls or furniture. Repair it after the scene has been restored, using
+    # the actual PandaOmron MuJoCo collision geometry.
+    exp_config.eval_runtime_params.repair_robot_base_pose_if_colliding = True
+
+
 ROBOT_OVERRIDE_REGISTRY: dict[type[BaseRobotConfig], OverrideFn] = {
     FrankaCAPRobotConfig: cap_robot_eval_override,
+    PandaOmronRobotConfig: panda_omron_robot_eval_override,
 }
 
 

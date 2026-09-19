@@ -371,6 +371,16 @@ class EvalRuntimeParams:
     add_custom_object: bool = False
     custom_object_path: str | Path | None = None
     custom_object_name: str | None = None
+    use_config_camera_system: bool = False
+    """Use the eval config camera system instead of replaying benchmark cameras."""
+    repair_robot_base_pose_if_colliding: bool = False
+    """Resample a collision-free base pose after replacing the benchmark robot."""
+    robot_base_pose_repair_max_tries: int = 100
+    """Maximum number of exact MuJoCo collision-checked repair candidates."""
+    robot_base_pose_repair_radius_range: tuple[float, float] = (0.4, 1.25)
+    """Allowed planar distance from the pickup target during pose repair."""
+    robot_base_pose_repair_map_radius: float = 0.40
+    """Coarse occupancy-map radius; exact robot geometry is checked afterwards."""
     robot_override_fn: OverrideFn | None = None
     """
     Hook that mutates the experiment config with robot-specific overrides.

@@ -58,6 +58,7 @@ from molmo_spaces.configs.task_sampler_configs import (
 from molmo_spaces.data_generation.config.nav_to_obj_configs import NavToObjDataGenConfig
 from molmo_spaces.data_generation.config.object_manipulation_datagen_configs import (
     FrankaPickAndPlaceDataGenConfig,
+    PandaOmronCuroboPickAndPlaceDataGenConfig,
 )
 from molmo_spaces.policy.dummy_policy import BrownianMotionPolicy, DummyPolicy
 from molmo_spaces.tasks.nav_task import NavToObjTask
@@ -74,6 +75,29 @@ from molmo_spaces.tasks.task_sampler import BaseMujocoTaskSampler
 from molmo_spaces.utils.function_utils import make_lenient
 
 TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+class PandaOmronCuroboPickPnPEvalConfig(
+    PandaOmronCuroboPickAndPlaceDataGenConfig
+):
+    """PandaOmron CuRobo oracle for cross-robot JSON benchmark evaluation."""
+
+    filter_for_successful_trajectories: bool = False
+    use_wandb: bool = False
+    policy_dt_ms: float = 66.0
+    ctrl_dt_ms: float = 2.0
+    sim_dt_ms: float = 2.0
+    task_horizon: int = 606
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        if self.policy_config is None:
+            raise RuntimeError(
+                "PandaOmron CuRobo initialization failed. Install both the robosuite "
+                "and curobo extras in the active environment."
+            )
+        self.policy_config.server_urls = []
+        self.robot_config.action_noise_config.enabled = False
 
 
 class JsonBenchmarkEvalConfig(MlSpacesExpConfig):

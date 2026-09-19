@@ -330,6 +330,28 @@ class JsonEvalRunner(ParallelRolloutRunner):
         return episode_spec.seed if episode_spec.seed is not None else episode_idx
 
     @staticmethod
+    def run_single_rollout(*args, **kwargs) -> bool:
+        """Count expected planner/IK failures as failed benchmark episodes."""
+        try:
+            return ParallelRolloutRunner.run_single_rollout(*args, **kwargs)
+        except (ValueError, RuntimeError) as exc:
+            policy = kwargs.get("policy")
+            if policy is None and len(args) >= 3:
+                policy = args[2]
+            policy_type = getattr(
+                getattr(getattr(policy, "config", None), "policy_config", None),
+                "policy_type",
+                None,
+            )
+            if policy_type != "planner":
+                raise
+            log.warning(
+                "Planner/IK rollout failed; recording episode as unsuccessful: %s",
+                exc,
+            )
+            return False
+
+    @staticmethod
     def should_close_episode_task_sampler() -> bool:
         """Close task sampler after each episode - we create per-episode."""
         return True

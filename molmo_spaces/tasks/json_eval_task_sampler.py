@@ -67,7 +67,7 @@ from molmo_spaces.utils.constants.simulation_constants import OBJAVERSE_FREE_JOI
 from molmo_spaces.utils.lazy_loading_utils import install_uid
 from molmo_spaces.utils.mj_model_and_data_utils import descendant_geoms
 from molmo_spaces.utils.object_metadata import ObjectMeta
-from molmo_spaces.utils.pose import pos_quat_to_pose_mat
+from molmo_spaces.utils.pose import pose_mat_to_7d, pos_quat_to_pose_mat
 
 log = logging.getLogger(__name__)
 
@@ -224,6 +224,12 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
         # Override house_inds to only include the house from the episode spec
         exp_config.task_sampler_config.house_inds = [episode_spec.house_index]
 
+        # Apply robot replacement before selecting cameras or consuming qpos.
+        # Cross-robot evaluations keep scene/task state from the benchmark but
+        # need the target robot's own joints and MJCF-mounted cameras.
+        if exp_config.eval_runtime_params and exp_config.eval_runtime_params.robot_override_fn:
+            exp_config.eval_runtime_params.robot_override_fn(episode_spec, exp_config)
+
         # Build the JSON-recorded camera config (used when eval cameras are not active).
         self._recorded_camera_config: CameraSystemConfig = self._build_camera_config_from_spec(
             episode_spec
@@ -232,7 +238,18 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
         # Detect whether the caller injected a FrankaEvalCameraSystem
         from molmo_spaces.configs.camera_configs import FrankaEvalCameraSystem
 
-        if isinstance(exp_config.camera_config, FrankaEvalCameraSystem):
+        use_config_camera_system = bool(
+            exp_config.eval_runtime_params
+            and exp_config.eval_runtime_params.use_config_camera_system
+        )
+        self._use_config_camera_system = use_config_camera_system
+        if use_config_camera_system:
+            self._eval_camera_system = None
+            log.info(
+                "Using %s from eval config instead of benchmark-recorded cameras",
+                type(exp_config.camera_config).__name__,
+            )
+        elif isinstance(exp_config.camera_config, FrankaEvalCameraSystem):
             self._eval_camera_system: FrankaEvalCameraSystem | None = exp_config.camera_config
             # Keep the eval system on exp_config.camera_config so the sensor
             # suite (image resolution, camera names) is built from it.
@@ -261,10 +278,6 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
         # TODO(RMH): Add input arg for noise level (high, low, medium) to support noisy eval
         if exp_config.robot_config.action_noise_config is not None:
             exp_config.robot_config.action_noise_config.enabled = False
-
-        # Apply robot-specific evaluation overrides. This is a little hacky, so use sparingly.
-        if exp_config.eval_runtime_params and exp_config.eval_runtime_params.robot_override_fn:
-            exp_config.eval_runtime_params.robot_override_fn(episode_spec, exp_config)
 
         super().__init__(exp_config)
 
@@ -574,6 +587,14 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
 
         self._metadata_adder.update(name_to_meta)
 
+        # Planner policies may require temporary MuJoCo bodies for batched
+        # grasp collision checks. JSON benchmarks only contain scene objects,
+        # so restore the same hook used by data-generation task samplers.
+        policy_cls = getattr(self.config.policy_config, "policy_cls", None)
+        add_policy_objects = getattr(policy_cls, "add_auxiliary_objects", None)
+        if callable(add_policy_objects):
+            add_policy_objects(self.config, spec)
+
     def randomize_scene(self, env: CPUMujocoEnv, robot_view) -> None:
         """
         Set up scene state from episode spec.
@@ -682,6 +703,9 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
            and place the exo camera via spherical perturbation with visibility
            checks.  Raises ``CameraPlacementError`` on failure.
         """
+        if self._use_config_camera_system:
+            env.camera_manager.setup_cameras(env, self.config.camera_config)
+            return
         if self._eval_camera_system is None:
             env.camera_manager.setup_cameras(env, self._recorded_camera_config)
             return
@@ -855,13 +879,75 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
         robot_pose_m = pos_quat_to_pose_mat(robot_base_pose[0:3], robot_base_pose[3:7])
         robot_view.base.pose = robot_pose_m
 
-        # Reset controllers
+        # Forward to update positions
+        mujoco.mj_forward(env.current_model, env.current_data)
+
+        runtime_params = self.config.eval_runtime_params
+        should_repair_pose = bool(
+            runtime_params and runtime_params.repair_robot_base_pose_if_colliding
+        )
+        if should_repair_pose and env.check_robot_collision_in_current_pose(
+            self.config.robot_config.robot_namespace
+        ):
+            original_pose = robot_view.base.pose.copy()
+            pickup_obj_name = getattr(self.config.task_config, "pickup_obj_name", None)
+            if not pickup_obj_name:
+                raise RuntimeError(
+                    "Cross-robot base-pose repair requires task_config.pickup_obj_name"
+                )
+
+            log.warning(
+                "Benchmark robot pose collides for %s; searching for a collision-free "
+                "PandaOmron placement near %s",
+                self.config.robot_config.name,
+                pickup_obj_name,
+            )
+            # Task sampling is performed before the rollout seed is installed.
+            # Scope the legacy NumPy RNG so pose repair is deterministic without
+            # perturbing any later policy/task randomness.
+            rng_state = np.random.get_state()
+            np.random.seed(int(self.episode_spec.seed or 0))
+            try:
+                repaired = env.place_robot_near(
+                    robot_view=robot_view,
+                    target=pickup_obj_name,
+                    max_tries=runtime_params.robot_base_pose_repair_max_tries,
+                    sampling_radius_range=runtime_params.robot_base_pose_repair_radius_range,
+                    # Use a permissive map query to avoid rejecting narrow rooms by
+                    # circumscribed-radius approximation. Every returned candidate
+                    # is still checked with the full PandaOmron MuJoCo geometry.
+                    robot_safety_radius=runtime_params.robot_base_pose_repair_map_radius,
+                    preserve_z=float(original_pose[2, 3]),
+                    face_target=True,
+                    check_camera_visibility=False,
+                )
+            finally:
+                np.random.set_state(rng_state)
+            if not repaired:
+                robot_view.base.pose = original_pose
+                mujoco.mj_forward(env.current_model, env.current_data)
+                raise RuntimeError(
+                    "Could not repair colliding cross-robot base pose for "
+                    f"{self.config.robot_config.name}"
+                )
+
+            repaired_pose = pose_mat_to_7d(robot_view.base.pose)
+            displacement = np.linalg.norm(robot_view.base.pose[:2, 3] - original_pose[:2, 3])
+            self.config.task_config.robot_base_pose = repaired_pose.copy()
+            self.episode_spec.task["robot_base_pose"] = repaired_pose.tolist()
+            log.info(
+                "Repaired cross-robot base pose by %.3f m: %s",
+                displacement,
+                repaired_pose.tolist(),
+            )
+
+        # Synchronize position controllers only after the final base pose is known.
+        # Otherwise the first no-op action drives the robot back toward the
+        # benchmark pose and can immediately recreate the collision.
         for controller in env.current_robot.controllers.values():
             controller.reset()
         env.current_robot.set_stationary()
         env.current_robot.compute_control()
-
-        # Forward to update positions
         mujoco.mj_forward(env.current_model, env.current_data)
 
         # Apply object colors (PickAndPlaceColor tasks store per-object rgba).

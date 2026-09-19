@@ -41,6 +41,8 @@ class CuroboPlannerPolicy(PlannerPolicy):
 
         # Arm selection
         self.arm_side: str | None = None
+        self.arm_move_group_id: str | None = None
+        self.gripper_move_group_id: str | None = None
         self.arm_start_idx: int = 0
         self.arm_end_idx: int = 0
 
@@ -98,7 +100,24 @@ class CuroboPlannerPolicy(PlannerPolicy):
 
         return joint_positions
 
+    def _get_planning_start_config(self) -> np.ndarray:
+        """Return the current planner state in its robot-relative convention.
+
+        MolmoSpaces stores a mobile base pose in world coordinates, while the
+        CuRobo models plan base motion relative to the episode's start pose.
+        Non-base groups retain their simulator joint values.
+        """
+        start_config = np.asarray(self._get_current_joint_positions(), dtype=float)
+        if "base" in self.planner_joint_ranges:
+            start, end = self.planner_joint_ranges["base"]
+            start_config[start:end] = 0.0
+        return start_config
+
     # ========== Coordinate Frame Transformations ==========
+    def _get_robot_base_pose(self) -> np.ndarray:
+        """Return the common RobotView base pose for mobile robot adapters."""
+        return self.task.env.robots[0].robot_view.base.pose
+
     def _transform_to_base_frame(self, target_ee_pose: np.ndarray) -> np.ndarray:
         """Transform target end-effector pose from world frame to robot base frame.
 
@@ -108,7 +127,7 @@ class CuroboPlannerPolicy(PlannerPolicy):
         Returns:
             4x4 transformation matrix in robot base frame.
         """
-        robot_base_pose_tf = self.task.env.robots[0].get_world_pose_tf_mat()
+        robot_base_pose_tf = self._get_robot_base_pose()
         target_ee_pose_tf_world_f = np.eye(4)
         target_ee_pose_tf_world_f[:3, 3] = target_ee_pose[:3]
         target_ee_pose_tf_world_f[:3, :3] = R.from_quat(
@@ -125,7 +144,9 @@ class CuroboPlannerPolicy(PlannerPolicy):
         Args:
             trajectory: List of waypoints to transform.
         """
-        robot_base_pose_tf = self.task.env.robots[0].get_world_pose_tf_mat()
+        if "base" not in self.planner_joint_ranges:
+            return
+        robot_base_pose_tf = self._get_robot_base_pose()
         planner_joint_ranges = self.planner_joint_ranges
         for waypoint in trajectory:
             base_joint_x, base_joint_y, base_joint_yaw = waypoint[
@@ -220,14 +241,14 @@ class CuroboPlannerPolicy(PlannerPolicy):
         Returns:
             Action dictionary for the robot.
 
-        Raises:
-            ValueError: If no trajectory is planned or trajectory is exhausted.
         """
         if not self.planned_trajectory or self.trajectory_index >= len(self.planned_trajectory):
-            raise ValueError(
-                "_execute_trajectory was called with no planned trajectory or "
-                "trajectory index >= len(planned_trajectory)"
+            self.failure_reason = "missing_or_exhausted_planned_trajectory"
+            log.error(
+                "Trajectory execution requested without an executable trajectory; "
+                "ending episode as failure"
             )
+            return {"done": True}
 
         # Skip waypoints that are already reached
         while self.trajectory_index < len(self.planned_trajectory):
@@ -273,8 +294,13 @@ class CuroboPlannerPolicy(PlannerPolicy):
                     f"{self.steps_spent_in_waypoint} steps. Will re-plan..."
                 )
                 max_reattempts = getattr(self.config.policy_config, "max_planning_reattempts", 3)
-                if self.retry_count > max_reattempts:
-                    raise ValueError("Max planning reattempts reached.")
+                if self.retry_count >= max_reattempts:
+                    self.failure_reason = "max_planning_reattempts_reached"
+                    log.error(
+                        "Maximum planning reattempts (%d) reached; ending episode as failure",
+                        max_reattempts,
+                    )
+                    return {"done": True}
                 self.planned_trajectory = None
                 self.trajectory_index = 0
                 self._retry_count += 1
@@ -386,12 +412,16 @@ class CuroboPlannerPolicy(PlannerPolicy):
         Returns:
             True if gripper appears to be grasping an object.
         """
-        if arm_side is None:
-            arm_side = self.arm_side
+        if self.gripper_move_group_id is not None:
+            gripper_move_group_id = self.gripper_move_group_id
+        else:
+            if arm_side is None:
+                arm_side = self.arm_side
+            gripper_move_group_id = f"{arm_side}_gripper"
 
-        gripper_pos = (
-            self.task.env.robots[0].robot_view.get_move_group(f"{arm_side}_gripper").joint_pos
-        )
+        gripper_pos = self.task.env.robots[0].robot_view.get_move_group(
+            gripper_move_group_id
+        ).joint_pos
         gripper_closed_pos = getattr(self.config.policy_config, "gripper_closed_pos", 0.0)
         gripper_closed_tolerance = getattr(
             self.config.policy_config, "gripper_closed_tolerance", 0.01
@@ -440,6 +470,8 @@ class CuroboPlannerPolicy(PlannerPolicy):
         )
 
         self.arm_side = selected_arm
+        self.arm_move_group_id = f"{selected_arm}_arm"
+        self.gripper_move_group_id = f"{selected_arm}_gripper"
 
         # Instantiate the planner for the selected arm only
         log.info(f"Instantiating motion planner for {selected_arm} arm")
@@ -454,8 +486,8 @@ class CuroboPlannerPolicy(PlannerPolicy):
             )
             self.planner_joint_ranges = self.config.policy_config.right_planner_joint_ranges
 
-        self.arm_start_idx = self.planner_joint_ranges[f"{self.arm_side}_arm"][0]
-        self.arm_end_idx = self.planner_joint_ranges[f"{self.arm_side}_arm"][1]
+        self.arm_start_idx = self.planner_joint_ranges[self.arm_move_group_id][0]
+        self.arm_end_idx = self.planner_joint_ranges[self.arm_move_group_id][1]
 
     # ========== IK and Motion Planning ==========
 
@@ -468,14 +500,7 @@ class CuroboPlannerPolicy(PlannerPolicy):
         Raises:
             ValueError: If IK solution cannot be found.
         """
-        init_config = np.concatenate(
-            [
-                np.zeros(3),
-                self.task.env.current_robot.robot_view.get_move_group(
-                    f"{self.arm_side}_arm"
-                ).joint_pos,
-            ]
-        )
+        init_config = self._get_planning_start_config()
 
         target_pose_7d = self._target_pose_to_base_frame(target_pose)
         joint_config, _ = self.planner.ik_solve(
@@ -496,21 +521,14 @@ class CuroboPlannerPolicy(PlannerPolicy):
         self._transform_traj_to_world_frame(trajectory)
         self.planned_trajectory = trajectory
 
-    def batch_plan_trajectory(self) -> None:
+    def batch_plan_trajectory(self) -> bool:
         """Plan trajectory using batch motion planning.
 
         Uses the current phase to determine goal poses and plans trajectories
         in batches for efficiency. Sets self.planned_trajectory to the best
         trajectory found.
         """
-        init_config = np.concatenate(
-            [
-                np.zeros(3),
-                self.task.env.current_robot.robot_view.get_move_group(
-                    f"{self.arm_side}_arm"
-                ).joint_pos,
-            ]
-        )
+        init_config = self._get_planning_start_config()
 
         # Setup collision avoidance if enabled
         if getattr(self.config.policy_config, "enable_collision_avoidance", False):
@@ -521,7 +539,8 @@ class CuroboPlannerPolicy(PlannerPolicy):
         goal_poses = self._get_batch_goal_poses()
         if goal_poses is None or len(goal_poses) == 0:
             log.warning("[BATCH PLAN] No goal poses available")
-            return
+            self.planned_trajectory = None
+            return False
 
         total = goal_poses.shape[0]
         batch_size = getattr(self.config.policy_config, "batch_size", 8)
@@ -530,6 +549,7 @@ class CuroboPlannerPolicy(PlannerPolicy):
         num_batches = (num_poses + batch_size - 1) // batch_size
 
         all_successful_trajectories = []
+        failure_statuses: list[str] = []
         current_phase = getattr(self, "current_phase", "unknown")
 
         for batch_start in range(0, num_poses, batch_size):
@@ -573,6 +593,14 @@ class CuroboPlannerPolicy(PlannerPolicy):
                 f"{current_phase} planning successes"
             )
 
+            if not np.any(successes):
+                status = getattr(result, "status", None)
+                if status is not None:
+                    if isinstance(status, (list, tuple)):
+                        failure_statuses.extend(str(item) for item in status)
+                    else:
+                        failure_statuses.append(str(status))
+
             # Process successful trajectories
             if np.any(successes):
                 optimized_plan = result.optimized_plan
@@ -601,8 +629,16 @@ class CuroboPlannerPolicy(PlannerPolicy):
 
         if all_successful_trajectories:
             self.planned_trajectory = self._select_best_trajectory(all_successful_trajectories)
+            return True
         else:
-            log.warning("[BATCH PLAN] No successful trajectories found across all batches")
+            self.planned_trajectory = None
+            status_summary = sorted(set(failure_statuses))
+            log.warning(
+                "[BATCH PLAN] No successful trajectories found across all batches; "
+                "CuRobo statuses=%s",
+                status_summary or ["unavailable"],
+            )
+            return False
 
     def _get_batch_goal_poses(self) -> np.ndarray | None:
         """Get goal poses for batch planning based on current phase.

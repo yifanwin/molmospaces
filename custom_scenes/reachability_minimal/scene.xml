@@ -1,0 +1,89 @@
+<mujoco model="reachability_minimal">
+
+    <compiler angle="degree"/>
+
+    <option
+        timestep="0.002"
+        gravity="0 0 -9.81"
+    />
+
+    <visual>
+        <global azimuth="135" elevation="-25"/>
+    </visual>
+
+    <worldbody>
+
+        <!-- 地面 -->
+        <geom
+            name="floor"
+            type="plane"
+            size="5 5 0.1"
+            rgba="0.8 0.8 0.8 1"
+        />
+
+        <!-- 桌面 -->
+        <body
+            name="table"
+            pos="0 0 0"
+        >
+            <geom
+                name="table_top"
+                type="box"
+                pos="0 0 0.75"
+                size="0.8 0.6 0.05"
+                rgba="0.55 0.35 0.2 1"
+            />
+
+            <!-- 四条桌腿 -->
+
+            <geom
+                name="leg_1"
+                type="box"
+                pos="0.7 0.5 0.35"
+                size="0.05 0.05 0.35"
+            />
+
+            <geom
+                name="leg_2"
+                type="box"
+                pos="-0.7 0.5 0.35"
+                size="0.05 0.05 0.35"
+            />
+
+            <geom
+                name="leg_3"
+                type="box"
+                pos="0.7 -0.5 0.35"
+                size="0.05 0.05 0.35"
+            />
+
+            <geom
+                name="leg_4"
+                type="box"
+                pos="-0.7 -0.5 0.35"
+                size="0.05 0.05 0.35"
+            />
+        </body>
+
+
+        <!-- 目标物体 -->
+        <body
+            name="target"
+            pos="0.45 0 0.85"
+        >
+
+            <freejoint/>
+
+            <geom
+                name="target_geom"
+                type="cylinder"
+                size="0.04 0.08"
+                mass="0.2"
+                rgba="0.9 0.2 0.2 1"
+            />
+
+        </body>
+
+    </worldbody>
+
+</mujoco>

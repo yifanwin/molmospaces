@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+from pydantic import model_validator
 
 from molmo_spaces.configs.abstract_config import Config
 from molmo_spaces.planner.astar_planner import AStarPlannerConfig
@@ -268,6 +269,71 @@ class CuroboPickAndPlacePlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     server_urls: list[str] = [
         "jupiter-cs-aus-107.reviz.ai2.in:10002",
     ]
+
+
+def panda_omron_planner_joint_ranges(
+    planner_move_group_ids: list[str],
+) -> dict[str, tuple[int, int]]:
+    """Validate a PandaOmron planning mode and return contiguous action slices."""
+    allowed = (
+        ["arm"],
+        ["torso", "arm"],
+        ["base", "torso", "arm"],
+    )
+    if planner_move_group_ids not in allowed:
+        raise ValueError(
+            "planner_move_group_ids must be one of: ['arm'], "
+            "['torso', 'arm'], or ['base', 'torso', 'arm']"
+        )
+    sizes = {"base": 3, "torso": 1, "arm": 7}
+    ranges = {}
+    offset = 0
+    for move_group_id in planner_move_group_ids:
+        ranges[move_group_id] = (offset, offset + sizes[move_group_id])
+        offset += sizes[move_group_id]
+    return ranges
+
+
+class PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
+    CuroboPickAndPlacePlannerPolicyConfig
+):
+    """Single-arm CuRobo configuration for the robosuite PandaOmron robot."""
+
+    curobo_planner_config: CuroboPlannerConfig | None = None
+    planner_move_group_ids: list[str] = ["base", "torso", "arm"]
+    planner_joint_ranges: dict[str, tuple[int, int]] = {
+        "base": (0, 3),
+        "torso": (3, 4),
+        "arm": (4, 11),
+    }
+    arm_move_group_id: str = "arm"
+    gripper_move_group_id: str = "gripper"
+    attached_object_link_name: str = "attached_object"
+    # The conservative hand sphere reaches 5.8 cm beyond the grip site.
+    # A 2 cm approach offset puts even a valid grasp inside the target obstacle.
+    pregrasp_z_offset: float = 0.10
+    gripper_open_command: list[float] = [0.04, -0.04]
+    gripper_close_command: list[float] = [0.0, 0.0]
+    velocity_constraints: dict[str, float] = {
+        "base": 0.5,
+        "torso": 0.25,
+        "arm": 0.5,
+    }
+
+    @model_validator(mode="after")
+    def validate_planner_move_groups(self):
+        self.planner_joint_ranges = panda_omron_planner_joint_ranges(
+            self.planner_move_group_ids
+        )
+        return self
+
+    def model_post_init(self, __context) -> None:
+        from molmo_spaces.policy.solvers.object_manipulation.panda_omron_curobo_pick_and_place_planner_policy import (
+            PandaOmronCuroboPickAndPlacePlannerPolicy,
+        )
+
+        self.policy_cls = PandaOmronCuroboPickAndPlacePlannerPolicy
+        self.policy_factory = PandaOmronCuroboPickAndPlacePlannerPolicy
 
 
 class PickAndPlaceNextToPlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):

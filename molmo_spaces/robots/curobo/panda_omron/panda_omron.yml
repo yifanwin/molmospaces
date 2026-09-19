@@ -1,0 +1,52 @@
+robot_cfg:
+  kinematics:
+    use_usd_kinematics: false
+    urdf_path: panda_omron.urdf
+    asset_root_path: ""
+    usd_robot_root: ""
+    base_link: world
+    ee_link: panda_grip_site
+    collision_link_names:
+      - omron_base
+      - panda_link0
+      - panda_link1
+      - panda_link2
+      - panda_link3
+      - panda_link4
+      - panda_link5
+      - panda_link6
+      - panda_link7
+      - panda_hand
+      - attached_object
+    collision_spheres: panda_omron_spheres.yml
+    collision_sphere_buffer: 0.005
+    extra_collision_spheres: {attached_object: 40}
+    self_collision_ignore:
+      omron_base: [panda_link0, panda_link1]
+      panda_link0: [panda_link1, panda_link2]
+      panda_link1: [panda_link2, panda_link3]
+      panda_link2: [panda_link3, panda_link4]
+      panda_link3: [panda_link4, panda_link5]
+      panda_link4: [panda_link5, panda_link6]
+      panda_link5: [panda_link6, panda_link7]
+      panda_link6: [panda_link7, panda_hand]
+      panda_link7: [panda_hand, attached_object]
+      panda_hand: [attached_object]
+    self_collision_buffer: {}
+    use_global_cumul: true
+    mesh_link_names: null
+    extra_links:
+      attached_object:
+        parent_link_name: panda_grip_site
+        link_name: attached_object
+        fixed_transform: [0, 0, 0, 1, 0, 0, 0]
+        joint_type: FIXED
+        joint_name: attached_object_joint
+    lock_joints: {}
+    cspace:
+      joint_names: [base_x, base_y, base_theta, torso_height, panda_joint1, panda_joint2, panda_joint3, panda_joint4, panda_joint5, panda_joint6, panda_joint7]
+      retract_config: [0.0, 0.0, 0.0, 0.2, 0.0, -0.00365046, 0.0, -2.61799388, 0.0, 2.74159265, 0.78539816]
+      null_space_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      cspace_distance_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      max_jerk: 500.0
+      max_acceleration: 15.0

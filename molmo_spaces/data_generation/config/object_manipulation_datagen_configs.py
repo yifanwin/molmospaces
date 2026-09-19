@@ -33,6 +33,7 @@ from molmo_spaces.configs.policy_configs import (
     CuroboOpenClosePlannerPolicyConfig,
     CuroboPickAndPlacePlannerPolicyConfig,
     OpenClosePlannerPolicyConfig,
+    PandaOmronCuroboPickAndPlacePlannerPolicyConfig,
     PickAndPlacePlannerPolicyConfig,
     PickPlannerPolicyConfig,
 )
@@ -187,6 +188,60 @@ class PandaOmronPickAndPlaceDataGenConfig(PickAndPlaceDataGenConfig):
     @property
     def tag(self) -> str:
         return "panda_omron_pick_and_place_datagen"
+
+
+@register_config("PandaOmronCuroboPickAndPlaceDataGenConfig")
+class PandaOmronCuroboPickAndPlaceDataGenConfig(PandaOmronPickAndPlaceDataGenConfig):
+    """PandaOmron pick-and-place using an in-process CuRobo planner."""
+
+    policy_config: PandaOmronCuroboPickAndPlacePlannerPolicyConfig | None = None
+
+    def _init_policy_config(self) -> PandaOmronCuroboPickAndPlacePlannerPolicyConfig:
+        import robosuite
+
+        from molmo_spaces.planner.curobo_planner import CuroboPlannerConfig
+
+        package_root = Path(__file__).resolve().parents[2]
+        curobo_dir = package_root / "robots" / "curobo" / "panda_omron"
+        robosuite_bullet_assets = (
+            Path(robosuite.__file__).resolve().parent / "models" / "assets" / "bullet_data"
+        )
+        planner_config = CuroboPlannerConfig(
+            curobo_robot_config_path=str(curobo_dir / "panda_omron.yml"),
+            urdf_path=str(curobo_dir / "panda_omron.urdf"),
+            asset_root_path=str(robosuite_bullet_assets),
+            usd_robot_root=str(curobo_dir),
+            collision_spheres_path=str(curobo_dir / "panda_omron_spheres.yml"),
+            collision_activation_distance=0.01,
+            num_trajopt_seeds=12,
+            max_attempts=15,
+            num_ik_seeds=128,
+            trajopt_tsteps=48,
+            interpolation_dt=self.ctrl_dt_ms / 1000.0,
+            check_start_validity=False,
+            enable_finetune_trajopt=True,
+        )
+        planner_move_group_ids = (
+            self.policy_config.planner_move_group_ids
+            if isinstance(
+                self.policy_config, PandaOmronCuroboPickAndPlacePlannerPolicyConfig
+            )
+            else ["base", "torso", "arm"]
+        )
+        return PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
+            curobo_planner_config=planner_config,
+            planner_move_group_ids=planner_move_group_ids,
+            enable_collision_avoidance=True,
+            server_urls=[],
+            max_steps_per_waypoint=30,
+            max_planning_reattempts=5,
+            grasp_collision_max_grasps=2000,
+            grasp_feasibility_max_grasps=512,
+        )
+
+    @property
+    def tag(self) -> str:
+        return "panda_omron_curobo_pick_and_place_datagen"
 
 
 @register_config("FrankaPickAndPlaceEasyDataGenConfig")

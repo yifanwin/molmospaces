@@ -59,6 +59,15 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         self.opening_timesteps = 0
         self.settle_steps = 0
 
+    def _gripper_action(self, *, open_gripper: bool) -> dict[str, Any]:
+        """Build a robot-specific gripper command without changing the phase logic."""
+        command_name = "gripper_open_command" if open_gripper else "gripper_close_command"
+        default_command = -100 if open_gripper else 100
+        command = getattr(self.config.policy_config, command_name, default_command)
+        if isinstance(command, list | tuple | np.ndarray):
+            command = np.asarray(command).copy()
+        return {self.gripper_move_group_id: command}
+
     @property
     def planners(self) -> dict:
         return {}
@@ -309,6 +318,8 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         )
 
         self.arm_side = selected_arm
+        self.arm_move_group_id = f"{selected_arm}_arm"
+        self.gripper_move_group_id = f"{selected_arm}_gripper"
 
         if self._use_local_planner:
             self._select_arm_local(selected_arm)
@@ -325,8 +336,8 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         else:
             self.planner_joint_ranges = self.config.policy_config.right_planner_joint_ranges
 
-        self.arm_start_idx = self.planner_joint_ranges[f"{self.arm_side}_arm"][0]
-        self.arm_end_idx = self.planner_joint_ranges[f"{self.arm_side}_arm"][1]
+        self.arm_start_idx = self.planner_joint_ranges[self.arm_move_group_id][0]
+        self.arm_end_idx = self.planner_joint_ranges[self.arm_move_group_id][1]
 
     def _select_arm_local(self, selected_arm: str) -> None:
         """Instantiate a local CuroboPlanner for the selected arm."""
@@ -353,14 +364,7 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         if self._use_local_planner:
             return CuroboPlannerPolicy.solve_ik(self, target_pose)
 
-        init_config = np.concatenate(
-            [
-                np.zeros(3),
-                self.task.env.current_robot.robot_view.get_move_group(
-                    f"{self.arm_side}_arm"
-                ).joint_pos,
-            ]
-        )
+        init_config = self._get_planning_start_config()
 
         target_pose_7d = self._target_pose_to_base_frame(target_pose)
         joint_config, success = self.client.ik(
@@ -381,7 +385,7 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         self._transform_traj_to_world_frame(trajectory)
         self.planned_trajectory = trajectory
 
-    def batch_plan_trajectory(self) -> None:
+    def batch_plan_trajectory(self) -> bool:
         """Plan trajectory in batches.
 
         Uses local planner or remote server depending on configuration.
@@ -391,14 +395,7 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         if self._use_local_planner:
             return CuroboPlannerPolicy.batch_plan_trajectory(self)
 
-        init_config = np.concatenate(
-            [
-                np.zeros(3),
-                self.task.env.current_robot.robot_view.get_move_group(
-                    f"{self.arm_side}_arm"
-                ).joint_pos,
-            ]
-        )
+        init_config = self._get_planning_start_config()
 
         # Build obstacle list for atomic world update during planning
         obstacles: list[dict] | None = None
@@ -413,22 +410,27 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         if self.current_phase == PickAndPlacePhase.PLACE and self.config.policy_config.attach_obj:
             pickup_obj_name = self.config.task_config.pickup_obj_name
             joint_pos_for_attach = np.array(self._get_current_joint_positions()).copy()
-            base_range = self.planner_joint_ranges["base"]
-            joint_pos_for_attach[base_range[0] : base_range[1]] = 0.0
+            if "base" in self.planner_joint_ranges:
+                base_range = self.planner_joint_ranges["base"]
+                joint_pos_for_attach[base_range[0] : base_range[1]] = 0.0
+            attach_link_name = getattr(
+                self.config.policy_config,
+                "attached_object_link_name",
+                f"attached_object_{self.arm_side}",
+            )
             self.client.attach_object(
                 object_names=[pickup_obj_name],
                 joint_position=joint_pos_for_attach.tolist(),
-                attach_link_names=[f"attached_object_{self.arm_side}"],
+                attach_link_names=[attach_link_name],
             )
-            log.info(
-                f"Attached object '{pickup_obj_name}' to link 'attached_object_{self.arm_side}'"
-            )
+            log.info(f"Attached object '{pickup_obj_name}' to link '{attach_link_name}'")
 
         # Get goal poses based on current phase
         goal_poses = self._get_batch_goal_poses()
         if goal_poses is None or len(goal_poses) == 0:
             log.warning("[BATCH PLAN] No goal poses available")
-            return
+            self.planned_trajectory = None
+            return False
 
         total = goal_poses.shape[0]
         batch_size = getattr(self.config.policy_config, "batch_size", 8)
@@ -492,15 +494,31 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
 
         if all_successful_trajectories:
             self.planned_trajectory = self._select_best_trajectory(all_successful_trajectories)
+            return True
         else:
+            self.planned_trajectory = None
             log.warning("[BATCH PLAN] No successful trajectories found across all batches")
+            return False
 
     # ========== Phase execution (unchanged) ==========
+
+    def _finish_after_planning_failure(self, phase: PickAndPlacePhase) -> dict[str, Any]:
+        """Terminate the episode cleanly when CuRobo cannot find a path."""
+        self.failure_reason = f"no_feasible_{phase.value}_trajectory"
+        log.error(
+            "CuRobo could not find a feasible %s trajectory; ending episode as failure",
+            phase.value,
+        )
+        self.current_phase = PickAndPlacePhase.DONE
+        self.planned_trajectory = None
+        self.trajectory_index = 0
+        self.steps_spent_in_waypoint = 0
+        return {"done": True}
 
     def _execute_pre_grasp_phase(self) -> dict[str, Any]:
         if self.planned_trajectory is not None:
             if self.trajectory_index < len(self.planned_trajectory):
-                return self._execute_trajectory({f"{self.arm_side}_gripper": -100})
+                return self._execute_trajectory(self._gripper_action(open_gripper=True))
             else:
                 self.current_phase = PickAndPlacePhase.GRASP
                 self.planned_trajectory = None
@@ -508,17 +526,18 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
                 self.steps_spent_in_waypoint = 0
                 return {}
         log.info("ENTERING PREGRASP PHASE")
-        self.batch_plan_trajectory()
-        return self._execute_trajectory({f"{self.arm_side}_gripper": -100})
+        if not self.batch_plan_trajectory():
+            return self._finish_after_planning_failure(PickAndPlacePhase.PREGRASP)
+        return self._execute_trajectory(self._gripper_action(open_gripper=True))
 
     def _execute_grasp_phase(self) -> dict[str, Any]:
         if self.planned_trajectory is not None:
             if self.trajectory_index < len(self.planned_trajectory):
-                return self._execute_trajectory({f"{self.arm_side}_gripper": -100})
+                return self._execute_trajectory(self._gripper_action(open_gripper=True))
             else:
                 if self.grasping_timesteps < self.config.policy_config.max_grasping_timesteps:
                     self.grasping_timesteps += 1
-                    return {f"{self.arm_side}_gripper": 100}
+                    return self._gripper_action(open_gripper=False)
                 else:
                     if self._grasping_something():
                         log.info(
@@ -544,7 +563,7 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         log.info("ENTERING GRASP PHASE")
 
         tcp_pose_world = self.task.env.current_robot.robot_view.get_move_group(
-            f"{self.arm_side}_gripper"
+            self.gripper_move_group_id
         ).leaf_frame_to_world
 
         grasp_pose_world = tcp_pose_world.copy()
@@ -553,12 +572,12 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
             self.config.policy_config.pregrasp_z_offset + 0.01
         )
         self.solve_ik(grasp_pose_world)
-        return self._execute_trajectory({f"{self.arm_side}_gripper": -100})
+        return self._execute_trajectory(self._gripper_action(open_gripper=True))
 
     def _execute_lift_phase(self) -> dict[str, Any]:
         if self.planned_trajectory is not None:
             if self.trajectory_index < len(self.planned_trajectory):
-                return self._execute_trajectory({f"{self.arm_side}_gripper": 100})
+                return self._execute_trajectory(self._gripper_action(open_gripper=False))
             else:
                 if not self._grasping_something():
                     # Object not grasped, move back to reach pre-grasp phase
@@ -580,18 +599,18 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
                 return {}
         log.info("ENTERING LIFT PHASE")
         tcp_pose_world = self.task.env.current_robot.robot_view.get_move_group(
-            f"{self.arm_side}_gripper"
+            self.gripper_move_group_id
         ).leaf_frame_to_world
 
         lift_pose_world = tcp_pose_world.copy()
         lift_pose_world[:3, 3] = lift_pose_world[:3, 3] + np.array([0, 0, 1]) * (0.05)
         self.solve_ik(lift_pose_world)
-        return self._execute_trajectory({f"{self.arm_side}_gripper": 100})
+        return self._execute_trajectory(self._gripper_action(open_gripper=False))
 
     def _execute_postplace_phase(self) -> dict[str, Any]:
         if self.planned_trajectory is not None:
             if self.trajectory_index < len(self.planned_trajectory):
-                return self._execute_trajectory({f"{self.arm_side}_gripper": -100})
+                return self._execute_trajectory(self._gripper_action(open_gripper=True))
             else:
                 if self.settle_steps < self.config.policy_config.max_settle_steps:
                     self.settle_steps += 1
@@ -603,12 +622,12 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
                 return {}
         log.info("ENTERING POST PLACE PHASE")
         tcp_pose_world = self.task.env.current_robot.robot_view.get_move_group(
-            f"{self.arm_side}_gripper"
+            self.gripper_move_group_id
         ).leaf_frame_to_world
         lift_pose_world = tcp_pose_world.copy()
         lift_pose_world[:3, 3] = lift_pose_world[:3, 3] + np.array([0, 0, 1]) * (0.05)
         self.solve_ik(lift_pose_world)
-        return self._execute_trajectory({f"{self.arm_side}_gripper": -100})
+        return self._execute_trajectory(self._gripper_action(open_gripper=True))
 
     def _execute_place_phase(self) -> dict[str, Any]:
         if not self._grasping_something():
@@ -622,11 +641,11 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
             return {}
         if self.planned_trajectory is not None:
             if self.trajectory_index < len(self.planned_trajectory):
-                return self._execute_trajectory({f"{self.arm_side}_gripper": 100})
+                return self._execute_trajectory(self._gripper_action(open_gripper=False))
             else:
                 if self.opening_timesteps < self.config.policy_config.max_opening_timesteps:
                     self.opening_timesteps += 1
-                    return {f"{self.arm_side}_gripper": -100}
+                    return self._gripper_action(open_gripper=True)
                 elif self.opening_timesteps == self.config.policy_config.max_opening_timesteps:
                     self.current_phase = PickAndPlacePhase.POSTPLACE
                     self.planned_trajectory = None
@@ -634,8 +653,9 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
                     self.steps_spent_in_waypoint = 0
                     return {}
         log.info("ENTERING PLACE PHASE")
-        self.batch_plan_trajectory()
-        return self._execute_trajectory({f"{self.arm_side}_gripper": 100})
+        if not self.batch_plan_trajectory():
+            return self._finish_after_planning_failure(PickAndPlacePhase.PLACE)
+        return self._execute_trajectory(self._gripper_action(open_gripper=False))
 
     def get_action(self, info: dict[str, Any]) -> dict[str, Any]:
         action_cmd = self.task.env.current_robot.robot_view.get_noop_ctrl_dict()
@@ -671,6 +691,7 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
             "place": dummy_pose,
         }
         self.settle_steps = 0
+        self.failure_reason = None
         from molmo_spaces.policy.solvers.object_manipulation.base_object_manipulation_planner_policy import (
             NoopAction,
         )

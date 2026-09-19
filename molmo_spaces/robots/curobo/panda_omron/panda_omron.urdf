@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<!--
+  CuRobo kinematic model for robosuite's PandaOmron composite robot.
+
+  The world frame is the Omron planar-joint pivot used by MolmoSpaces.  The
+  0.21 m x offset and 0.70 m arm mounting height mirror robosuite's
+  omron_mobile_base.xml.  Panda mesh URIs are resolved against robosuite's
+  bullet_data directory at runtime.
+-->
+<robot name="panda_omron">
+  <link name="world"/>
+  <link name="base_x_link"/>
+  <link name="base_y_link"/>
+  <link name="base_pivot"/>
+  <link name="omron_base">
+    <collision><origin xyz="-0.20 0 0.192"/><geometry><box size="0.70 0.50 0.38"/></geometry></collision>
+  </link>
+
+  <joint name="base_x" type="prismatic">
+    <parent link="world"/><child link="base_x_link"/><axis xyz="1 0 0"/>
+    <limit lower="-5" upper="5" effort="600" velocity="1.0"/>
+  </joint>
+  <joint name="base_y" type="prismatic">
+    <parent link="base_x_link"/><child link="base_y_link"/><axis xyz="0 1 0"/>
+    <limit lower="-5" upper="5" effort="600" velocity="1.0"/>
+  </joint>
+  <joint name="base_theta" type="revolute">
+    <parent link="base_y_link"/><child link="base_pivot"/><axis xyz="0 0 1"/>
+    <limit lower="-6.283185307" upper="6.283185307" effort="600" velocity="1.5"/>
+  </joint>
+  <joint name="omron_root" type="fixed">
+    <parent link="base_pivot"/><child link="omron_base"/><origin xyz="0.21 0 0"/>
+  </joint>
+
+  <link name="panda_link0">
+    <collision><geometry><mesh filename="package://panda_description/meshes/collision/link0.stl"/></geometry></collision>
+  </link>
+  <joint name="torso_height" type="prismatic">
+    <parent link="omron_base"/><child link="panda_link0"/><origin xyz="0 0 0.70"/>
+    <axis xyz="0 0 1"/><limit lower="0" upper="0.34" effort="100000" velocity="0.25"/>
+  </joint>
+
+  <link name="panda_link1"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link1.stl"/></geometry></collision></link>
+  <joint name="panda_joint1" type="revolute"><parent link="panda_link0"/><child link="panda_link1"/><origin xyz="0 0 0.333"/><axis xyz="0 0 1"/><limit lower="-2.8973" upper="2.8973" effort="87" velocity="2.175"/></joint>
+  <link name="panda_link2"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link2.stl"/></geometry></collision></link>
+  <joint name="panda_joint2" type="revolute"><parent link="panda_link1"/><child link="panda_link2"/><origin xyz="0 0 0" rpy="-1.57079632679 0 0"/><axis xyz="0 0 1"/><limit lower="-1.7628" upper="1.7628" effort="87" velocity="2.175"/></joint>
+  <link name="panda_link3"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link3.stl"/></geometry></collision></link>
+  <joint name="panda_joint3" type="revolute"><parent link="panda_link2"/><child link="panda_link3"/><origin xyz="0 -0.316 0" rpy="1.57079632679 0 0"/><axis xyz="0 0 1"/><limit lower="-2.8973" upper="2.8973" effort="87" velocity="2.175"/></joint>
+  <link name="panda_link4"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link4.stl"/></geometry></collision></link>
+  <joint name="panda_joint4" type="revolute"><parent link="panda_link3"/><child link="panda_link4"/><origin xyz="0.0825 0 0" rpy="1.57079632679 0 0"/><axis xyz="0 0 1"/><limit lower="-3.0718" upper="-0.0698" effort="87" velocity="2.175"/></joint>
+  <link name="panda_link5"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link5.stl"/></geometry></collision></link>
+  <joint name="panda_joint5" type="revolute"><parent link="panda_link4"/><child link="panda_link5"/><origin xyz="-0.0825 0.384 0" rpy="-1.57079632679 0 0"/><axis xyz="0 0 1"/><limit lower="-2.8973" upper="2.8973" effort="12" velocity="2.61"/></joint>
+  <link name="panda_link6"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link6.stl"/></geometry></collision></link>
+  <joint name="panda_joint6" type="revolute"><parent link="panda_link5"/><child link="panda_link6"/><origin xyz="0 0 0" rpy="1.57079632679 0 0"/><axis xyz="0 0 1"/><limit lower="-0.0175" upper="3.7525" effort="12" velocity="2.61"/></joint>
+  <link name="panda_link7"><collision><geometry><mesh filename="package://panda_description/meshes/collision/link7.stl"/></geometry></collision></link>
+  <joint name="panda_joint7" type="revolute"><parent link="panda_link6"/><child link="panda_link7"/><origin xyz="0.088 0 0" rpy="1.57079632679 0 0"/><axis xyz="0 0 1"/><limit lower="-2.8973" upper="2.8973" effort="12" velocity="2.61"/></joint>
+
+  <link name="panda_hand"><collision><geometry><mesh filename="package://panda_description/meshes/collision/hand.stl"/></geometry></collision></link>
+  <joint name="panda_hand_joint" type="fixed"><parent link="panda_link7"/><child link="panda_hand"/><origin xyz="0 0 0.1065" rpy="0 0 -0.785398163397"/></joint>
+  <link name="panda_gripper"/>
+  <joint name="panda_gripper_joint" type="fixed"><parent link="panda_hand"/><child link="panda_gripper"/><origin rpy="0 0 -1.57079632679"/></joint>
+  <link name="panda_grip_site"/>
+  <joint name="panda_grip_site_joint" type="fixed"><parent link="panda_gripper"/><child link="panda_grip_site"/><origin xyz="0 0 0.097"/></joint>
+</robot>

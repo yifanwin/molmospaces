@@ -165,6 +165,10 @@ class PandaOmronRobot(Robot):
                 kv,
                 ctrlrange,
             )
+            # 原速度控制模型的静摩擦会让位置伺服停在目标外：
+            # 偏航轴 250 / 5000 = 0.05 rad，超过规划器的 0.0275 容差。
+            # 与升降轴一样移除控制器遗留的关节摩擦，保留几何接触摩擦。
+            spec.joint(f"mobilebase0_joint_mobile_{joint_suffix}").frictionloss = 0.0
 
         cls._make_position_servo(
             spec,

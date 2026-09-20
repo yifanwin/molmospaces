@@ -10,6 +10,15 @@ from molmo_spaces.evaluation.robot_eval_overrides import (
 )
 
 
+def test_panda_omron_eval_preserves_first_success():
+    """评测不能继承数据生成的成功后继续执行语义。"""
+    from molmo_spaces.evaluation.configs.evaluation_configs import (
+        PandaOmronCuroboPickPnPEvalConfig,
+    )
+
+    assert PandaOmronCuroboPickPnPEvalConfig.model_fields["end_on_success"].default is True
+
+
 @pytest.mark.parametrize(
     ("groups", "ranges"),
     [

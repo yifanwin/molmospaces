@@ -132,6 +132,23 @@ def test_position_servos_step_without_instability():
     assert view.get_gripper("gripper").is_open
 
 
+@pytest.mark.parametrize("yaw", [0.15, -0.15])
+def test_base_reaches_planner_tolerance_within_waypoint_budget(yaw):
+    """底盘必须在 E4 的 1.98 秒预算内满足 0.0275 的规划容差。"""
+    config, model, data, view = _compile_robot()
+    model.opt.timestep = 0.002
+    model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    view.set_qpos_dict(config.init_qpos)
+    for name, values in config.init_qpos.items():
+        view.get_move_group(name).ctrl = np.asarray(values)
+    target = np.array([0.05, -0.05, yaw])
+    view.base.ctrl = target
+    mujoco.mj_forward(model, data)
+    for _ in range(990):
+        mujoco.mj_step(model, data)
+    np.testing.assert_allclose(view.base.joint_pos, target, atol=0.005)
+
+
 @pytest.mark.slow
 def test_cpu_and_warp_kinematics_construct():
     config = PandaOmronRobotConfig()

@@ -83,6 +83,7 @@ class PandaOmronCuroboPickPnPEvalConfig(
     """PandaOmron CuRobo oracle for cross-robot JSON benchmark evaluation."""
 
     filter_for_successful_trajectories: bool = False
+    end_on_success: bool = True
     use_wandb: bool = False
     policy_dt_ms: float = 66.0
     ctrl_dt_ms: float = 2.0

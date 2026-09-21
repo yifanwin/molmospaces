@@ -290,6 +290,12 @@ class CuroboPickAndPlacePlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
         "left_arm": 0.5,  # [rad / policy_dt_ms]
     }
     grasp_vertical_cost_weight: float = 0.5
+    # --- grasp 批量 IK 可达性预筛（E2-IK-filter）---
+    # 关闭时行为与改动前完全一致。开启后会在碰撞过滤之后、生成 pregrasp 之前，
+    # 用 CuRobo 的批量 IK 筛掉运动学上不可达的候选。仅本地 planner（server_urls 为空）支持。
+    enable_grasp_ik_prefilter: bool = False
+    grasp_ik_prefilter_max_grasps: int = 128  # 预筛候选数上限，同时用作固定的 IK batch size
+    grasp_ik_prefilter_num_seeds: int = 32  # 每个候选的 IK seed 数
     attach_obj: bool = False
     max_settle_steps: int = 5
     server_timeout: float | None = (

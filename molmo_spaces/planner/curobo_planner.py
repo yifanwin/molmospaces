@@ -104,6 +104,8 @@ class CuroboPlanner(Planner):
         self.attached_object2link_dict = {}
         self.attached_link2object_dict = {}
         self._build_motion_gen()
+        # Batch size the IK solver was last warmed up for; None until the first batch IK call.
+        self._ik_batch_warmup_size: int | None = None
 
     def reset(self) -> None:
         """
@@ -604,3 +606,79 @@ class CuroboPlanner(Planner):
             )
             del ik_result
             return None, None
+
+    def ik_solve_batch(
+        self,
+        goal_poses: list[list],
+        seed_config: list | None = None,
+        num_seeds: int | None = None,
+        disable_collision: bool = True,
+        pad_to: int | None = None,
+    ) -> np.ndarray:
+        """Solve inverse kinematics for a batch of goal poses in parallel.
+
+        Unlike :meth:`ik_solve`, which answers a single query, this issues one batched IK
+        problem per goal pose and reports reachability for each of them.
+
+        Args:
+            goal_poses: Goal poses in 7D format [x, y, z, qw, qx, qy, qz], one per query.
+            seed_config: Optional single seed joint configuration, broadcast to every query.
+            num_seeds: Number of IK seeds per query. Falls back to the planner's num_ik_seeds.
+            disable_collision: If True, ignore collision checking during IK solve. Reachability
+                screening wants this enabled; collision is judged separately.
+            pad_to: If given, pad the batch up to this size by repeating the last pose, so the
+                solver always sees the same batch size and does not re-autotune between calls.
+
+        Returns:
+            Boolean ndarray of shape (len(goal_poses),) marking which queries admit a solution.
+        """
+        n_poses = len(goal_poses)
+        if n_poses == 0:
+            return np.zeros(0, dtype=bool)
+
+        batch_poses = list(goal_poses)
+        if pad_to is not None and n_poses < pad_to:
+            batch_poses.extend([goal_poses[-1]] * (pad_to - n_poses))
+        batch_size = len(batch_poses)
+
+        # Build the Pose directly rather than through Pose.from_list: the latter slices a flat
+        # 7-vector and would silently misread a batch as a goalset (n_goalset=N, batch=1).
+        goal_poses_tensor = torch.tensor(batch_poses, dtype=torch.float32, device="cuda")
+        goal_pose = Pose(
+            position=goal_poses_tensor[:, :3],
+            quaternion=goal_poses_tensor[:, 3:],
+        )
+
+        seed_config_tensor = None
+        if seed_config is not None:
+            # Shape must be (batch, num_seeds, dof); one seed seeds every query in the batch.
+            seed = torch.tensor(seed_config, dtype=torch.float32, device="cuda")
+            seed_config_tensor = seed.view(1, 1, -1).repeat(batch_size, 1, 1)
+
+        if self._ik_batch_warmup_size != batch_size:
+            self.motion_gen.warmup(enable_graph=False, batch=batch_size, warmup_js_trajopt=False)
+            self._ik_batch_warmup_size = batch_size
+
+        if disable_collision:
+            for rollout in self.motion_gen.ik_solver.get_all_rollout_instances():
+                rollout.primitive_collision_constraint.disable_cost()
+                rollout.robot_self_collision_constraint.disable_cost()
+
+        try:
+            ik_result = self.motion_gen.solve_ik(
+                goal_pose=goal_pose,
+                seed_config=seed_config_tensor,
+                return_seeds=1,
+                num_seeds=num_seeds if num_seeds is not None else self.num_ik_seeds,
+            )
+        finally:
+            # Re-enable collision checking
+            if disable_collision:
+                for rollout in self.motion_gen.ik_solver.get_all_rollout_instances():
+                    rollout.primitive_collision_constraint.enable_cost()
+                    rollout.robot_self_collision_constraint.enable_cost()
+
+        # success has shape (batch, return_seeds); record only the real, unpadded queries.
+        success = ik_result.success[:, 0].cpu().numpy().astype(bool)[:n_poses]
+        del ik_result, goal_pose, goal_poses_tensor
+        return success

@@ -154,6 +154,12 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         else:
             noncolliding_close_grasp_ids = close_grasp_ids
 
+        # Filter out kinematically unreachable grasps if enabled (batch IK on the local CuRobo planner)
+        if self.config.policy_config.enable_grasp_ik_prefilter:
+            noncolliding_close_grasp_ids = self._filter_grasps_by_ik(
+                grasp_poses_world, noncolliding_close_grasp_ids
+            )
+
         # Return ALL non-colliding grasps sorted by cost (not just the best one)
         grasp_poses = grasp_poses_world[noncolliding_close_grasp_ids]
 
@@ -164,6 +170,60 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         )
 
         return grasp_poses
+
+    def _filter_grasps_by_ik(
+        self, grasp_poses_world: np.ndarray, candidate_ids: np.ndarray
+    ) -> np.ndarray:
+        """Screen grasp candidates for kinematic reachability with the CuRobo batch IK solver.
+
+        Checks the grasp poses themselves rather than the retracted pregrasp poses, matching
+        the semantics of select_grasp_pose. RBY1 deliberately has no parallel_kinematics
+        (see molmo_spaces/robots/rby1.py), so this goes through the planner's own IK instead.
+
+        Only the top grasp_ik_prefilter_max_grasps candidates are screened: the downstream
+        batch planner only ever attempts the first batch_size * max_batch_plan_attempts poses,
+        so screening deeper would cost time without changing the outcome.
+
+        Args:
+            grasp_poses_world: All grasp poses in world frame.
+            candidate_ids: Indices into grasp_poses_world, already sorted by cost.
+
+        Returns:
+            The subset of candidate_ids that admits an IK solution, order preserved. Falls back
+            to the unscreened candidates if none are reachable.
+        """
+        policy_config = self.config.policy_config
+        if not self._use_local_planner:
+            log.warning("IK prefilter needs the local CuRobo planner; skipping (server_urls set)")
+            return candidate_ids
+
+        max_grasps = policy_config.grasp_ik_prefilter_max_grasps
+        screened_ids = candidate_ids[:max_grasps]
+        screened_poses_world = grasp_poses_world[screened_ids]
+
+        seed_config = self._get_planning_start_config()
+        goal_poses_7d = [
+            self._target_pose_to_base_frame(pose).tolist() for pose in screened_poses_world
+        ]
+
+        with Timer() as ik_check_time:
+            feasible_mask = self.planner.ik_solve_batch(
+                goal_poses=goal_poses_7d,
+                seed_config=seed_config.tolist(),
+                num_seeds=policy_config.grasp_ik_prefilter_num_seeds,
+                disable_collision=True,
+                pad_to=max_grasps,
+            )
+        log.info(
+            f"IK-prefiltered {len(screened_ids)} grasps in {ik_check_time.value:.3f}s, "
+            f"found {np.sum(feasible_mask)} reachable grasps"
+        )
+
+        feasible_ids = screened_ids[feasible_mask]
+        if len(feasible_ids) == 0:
+            log.warning("No reachable grasps found, falling back to all non-colliding grasps")
+            return candidate_ids
+        return feasible_ids
 
     def _get_place_poses(self) -> np.ndarray:
         grasp_pose_world = self.pre_grasp_poses

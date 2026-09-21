@@ -65,6 +65,7 @@ from molmo_spaces.data_generation.config.object_manipulation_datagen_configs imp
     FrankaPickAndPlaceDataGenConfig,
     PandaOmronCuroboPickAndPlaceDataGenConfig,
     PandaOmronPickAndPlaceDataGenConfig,
+    RBY1PickAndPlaceDataGenConfig,
 )
 from molmo_spaces.policy.dummy_policy import BrownianMotionPolicy, DummyPolicy
 from molmo_spaces.tasks.nav_task import NavToObjTask
@@ -81,6 +82,80 @@ from molmo_spaces.tasks.task_sampler import BaseMujocoTaskSampler
 from molmo_spaces.utils.function_utils import make_lenient
 
 TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+class RBY1CuroboPickPnPEvalConfig(RBY1PickAndPlaceDataGenConfig):
+    """Oracle RBY1 pick-and-place evaluation with the existing CuRobo planner.
+
+    The JSON benchmark remains authoritative for each episode's scene, robot,
+    object, receptacle, and camera setup.  Unlike the learned MolmoBot policy,
+    the inherited planner reads the simulator's ground-truth task state and
+    uses CuRobo IK/TrajOpt; RGB observations are recorded for diagnostics but
+    are not used to choose actions.
+    """
+
+    # Keep all episodes so the evaluator can report both successes and failures.
+    requires_policy_auxiliary_objects: ClassVar[bool] = True
+    filter_for_successful_trajectories: bool = False
+    use_wandb: bool = False
+
+    # 基类 MlSpacesExpConfig 的默认值为 False，若不覆盖，成功瞬间不会终止 rollout，
+    # judge_success() 只在循环结束后调用一次，瞬时成功会被最终状态覆盖而记为失败。
+    # 20260917_103152 那次运行即因此把成功率低估了 2.1 倍（2.67% vs 5.61%）。
+    end_on_success: bool = True
+
+    # Match the RBY1 benchmark/data-generation control rates.
+    policy_dt_ms: float = 100.0
+    ctrl_dt_ms: float = 20.0
+    sim_dt_ms: float = 4.0
+    # 与 20260917_103152 运行保持一致（该次运行的 pkl 中为 600）。
+    task_horizon: int = 600
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        if self.policy_config is None:
+            raise RuntimeError(
+                "CuRobo policy initialization failed. Run this config in a CUDA-enabled "
+                "environment with the molmospaces curobo extra installed."
+            )
+
+        # RBY1PickAndPlaceDataGenConfig currently uses local CuRobo, but keep
+        # this explicit so an upstream default change cannot silently switch
+        # this oracle evaluation to a remote planner service.
+        self.policy_config.server_urls = []
+        self.robot_config.action_noise_config.enabled = False
+
+
+class RBY1LLMWaypointPickPnPEvalConfig(RBY1PickAndPlaceDataGenConfig):
+    """RBY1 pick-and-place evaluation with API-generated, locally checked waypoints."""
+
+    requires_task_bound_policy: ClassVar[bool] = True
+    filter_for_successful_trajectories: bool = False
+    end_on_success: bool = True
+    use_wandb: bool = False
+    policy_dt_ms: float = 100.0
+    ctrl_dt_ms: float = 20.0
+    sim_dt_ms: float = 4.0
+    task_horizon: int = 600
+    policy_config: LLMWaypointPlannerPolicyConfig | None = None
+
+    def _init_policy_config(self) -> LLMWaypointPlannerPolicyConfig:
+        return LLMWaypointPlannerPolicyConfig(
+            # The policy replaces this with the selected left/right arm before IK.
+            ik_unlocked_move_group_ids=["left_arm"],
+            go_home_move_group_ids=[],
+        )
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        from molmo_spaces.policy.solvers.object_manipulation.llm_waypoint_planner_policy import (
+            validate_llm_environment,
+        )
+
+        if self.policy_config is None:
+            self.policy_config = self._init_policy_config()
+        validate_llm_environment(self.policy_config.api_timeout_s)
+        self.robot_config.action_noise_config.enabled = False
 
 
 class PandaOmronCuroboPickPnPEvalConfig(

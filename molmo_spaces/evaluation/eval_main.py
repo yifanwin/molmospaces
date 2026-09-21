@@ -1,5 +1,5 @@
 """
-Evaluation entrypoint for learned policies on JSON-based benchmarks.
+Evaluation entrypoint for learned and planner policies on JSON-based benchmarks.
 
 This module evaluates policies on JSON benchmark files where each episode is fully
 self-contained. Unlike the pickle-based frozen config approach, JSON benchmarks are
@@ -282,6 +282,7 @@ def get_args():
         help="The natural language name for the custom object (e.g., 'lemon', 'cup'). "
         "If not provided, will attempt to extract from the object path but could be incorrect.",
     )
+    parser.add_argument("--env_file", type=Path, default=None, help="可选 KEY=VALUE 环境文件；不覆盖已有环境变量。")
     return parser.parse_args()
 
 
@@ -748,6 +749,15 @@ def run_evaluation(
 def main() -> None:
     """Command-line entry point for evaluation."""
     args = get_args()
+    if args.env_file is not None and args.env_file.is_file():
+        for raw_line in args.env_file.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip():
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
 
     # Build eval camera config from CLI flags (None if --use_eval_cameras not passed)
     from molmo_spaces.utils.eval_camera_randomization_utils import (

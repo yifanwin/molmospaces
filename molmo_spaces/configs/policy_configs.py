@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -14,6 +15,9 @@ from molmo_spaces.utils.function_utils import make_lenient
 
 # Import CuroboPlannerConfig if available (requires GPU), otherwise create a stub
 try:
+    # P0 等纯 MuJoCo 工程验证可显式禁用可选 GPU 依赖；默认行为保持不变。
+    if os.environ.get("MLSPACES_DISABLE_CUROBO") == "1":
+        raise ImportError("CuRobo explicitly disabled for this process")
     from molmo_spaces.planner.curobo_planner import CuroboPlannerConfig
 except (ImportError, RuntimeError):
     # Create a stub class when CuRobo isn't available (e.g., on non-GPU nodes)

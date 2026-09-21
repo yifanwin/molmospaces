@@ -119,6 +119,7 @@ class MoveSequence(ActionPrimitive):
         move_segments: list[MoveSegment],
         is_holding_object: bool = False,
         gripper_empty_threshold: float = 0.0,
+        gripper_move_group_id: str | None = None,
     ) -> None:
         super().__init__(robot_view, sum(seg.duration for seg in move_segments))
         self._move_segments = move_segments
@@ -127,6 +128,7 @@ class MoveSequence(ActionPrimitive):
         self.settle_time = settle_time
         self.is_holding_object = is_holding_object
         self.gripper_empty_threshold = gripper_empty_threshold
+        self.gripper_move_group_id = gripper_move_group_id
 
     def execute(self) -> bool:
         if self.start_time is None:
@@ -181,7 +183,9 @@ class MoveSequence(ActionPrimitive):
             return True
 
         if self.is_holding_object:
-            gripper_mg_id = self.robot_view.get_gripper_movegroup_ids()[0]
+            gripper_mg_id = (
+                self.gripper_move_group_id or self.robot_view.get_gripper_movegroup_ids()[0]
+            )
             gripper = self.robot_view.get_gripper(gripper_mg_id)
             if (
                 gripper.inter_finger_dist
@@ -213,6 +217,7 @@ class TCPMoveSequence(MoveSequence):
         gripper_empty_threshold: float = 0.0,
         tcp_pos_err_threshold: float = np.inf,
         tcp_rot_err_threshold: float = np.inf,
+        gripper_move_group_id: str | None = None,
     ) -> None:
         super().__init__(
             robot_view,
@@ -220,6 +225,7 @@ class TCPMoveSequence(MoveSequence):
             move_segments,
             is_holding_object,
             gripper_empty_threshold,
+            gripper_move_group_id,
         )
         self.tcp_to_jp_fn = tcp_to_jp_fn
         self.tcp_pos_err_threshold = tcp_pos_err_threshold
@@ -249,7 +255,7 @@ class TCPMoveSequence(MoveSequence):
         curr_target_pose = self.get_current_target_pose()
 
         # Solve IK for current target pose
-        mg_id = self.robot_view.get_gripper_movegroup_ids()[0]
+        mg_id = self.gripper_move_group_id or self.robot_view.get_gripper_movegroup_ids()[0]
         return self.tcp_to_jp_fn(mg_id, curr_target_pose)
 
     def check_failure(self) -> bool:
@@ -260,7 +266,7 @@ class TCPMoveSequence(MoveSequence):
             return False
 
         curr_target_pose = self.get_current_target_pose()
-        gripper_mg_id = self.robot_view.get_gripper_movegroup_ids()[0]
+        gripper_mg_id = self.gripper_move_group_id or self.robot_view.get_gripper_movegroup_ids()[0]
         gripper = self.robot_view.get_gripper(gripper_mg_id)
 
         trf = np.linalg.inv(gripper.leaf_frame_to_world) @ curr_target_pose
@@ -284,6 +290,7 @@ class JointMoveSequence(MoveSequence):
         move_segments: list[JointMoveSegment],
         is_holding_object: bool = False,
         gripper_empty_threshold: float = 0.0,
+        gripper_move_group_id: str | None = None,
     ) -> None:
         super().__init__(
             robot_view,
@@ -291,6 +298,7 @@ class JointMoveSequence(MoveSequence):
             move_segments,
             is_holding_object,
             gripper_empty_threshold,
+            gripper_move_group_id,
         )
 
     @property
@@ -335,9 +343,16 @@ class GripperAction(ActionPrimitive):
     Action primitive that opens or closes the gripper.
     """
 
-    def __init__(self, robot_view: RobotView, target_open: bool, duration: float) -> None:
+    def __init__(
+        self,
+        robot_view: RobotView,
+        target_open: bool,
+        duration: float,
+        gripper_move_group_id: str | None = None,
+    ) -> None:
         super().__init__(robot_view, duration)
         self.target_open = target_open
+        self.gripper_move_group_id = gripper_move_group_id
 
     def execute(self) -> bool:
         if self.start_time is None:
@@ -347,7 +362,7 @@ class GripperAction(ActionPrimitive):
             else:
                 log.info("Closing gripper...")
 
-            mg_id = self.robot_view.get_gripper_movegroup_ids()[0]
+            mg_id = self.gripper_move_group_id or self.robot_view.get_gripper_movegroup_ids()[0]
             gripper = self.robot_view.get_gripper(mg_id)
             gripper.set_gripper_ctrl_open(self.target_open)
 
@@ -395,6 +410,11 @@ class GraspPoseSensor(Sensor):
         """Get grasp pose (using current TCP pose as proxy)."""
         if task._registered_policy is not None:
             assert isinstance(task._registered_policy, BaseObjectManipulationPlannerPolicy)
+            # A rejected reset-time plan has no grasp target yet. Keep failure
+            # observations recordable; zeros denote an unavailable target,
+            # just as when no policy is registered (not an executable pose).
+            if "grasp" not in task._registered_policy.target_poses:
+                return np.zeros(7, dtype=np.float32)
             return np.array(
                 pose_mat_to_7d(task._registered_policy.target_poses["grasp"]),
                 dtype=np.float32,
@@ -456,6 +476,11 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
         return phases
 
     def reset(self, reset_retries: bool = True):
+        # A failed reset must not expose stale actions/targets from an earlier
+        # plan to diagnostic sensors or a later retry.
+        self.action_primitives = []
+        self.action_idx = 0
+        self.target_poses = {}
         if not self.ik_warmed_up:
             with Timer() as warmup_time:
                 self.task.env.current_robot.parallel_kinematics.warmup_ik(
@@ -471,19 +496,31 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
             self._retry_count = 0
 
         self.target_poses = {}
-        for action_primitive in self.action_primitives:
-            if isinstance(action_primitive, TCPMoveSequence):
-                for move_segment in action_primitive.move_segments:
-                    self.target_poses[move_segment.name] = move_segment.end_pose
-            elif isinstance(action_primitive, JointMoveSequence):
-                gripper_mg_id = self.robot_view.get_gripper_movegroup_ids()[0]
-                kinematics = self.task.env.current_robot.kinematics
-                for move_segment in action_primitive.move_segments:
-                    end_qpos = move_segment.end_qpos
-                    base_pose = self.robot_view.base.pose
-                    self.target_poses[move_segment.name] = kinematics.fk(end_qpos, base_pose)[
-                        gripper_mg_id
-                    ]
+        qpos_snapshot = {
+            name: value.copy() for name, value in self.robot_view.get_qpos_dict().items()
+        }
+        base_pose_snapshot = self.robot_view.base.pose.copy()
+        try:
+            for action_primitive in self.action_primitives:
+                if isinstance(action_primitive, TCPMoveSequence):
+                    for move_segment in action_primitive.move_segments:
+                        self.target_poses[move_segment.name] = move_segment.end_pose
+                elif isinstance(action_primitive, JointMoveSequence):
+                    gripper_mg_id = (
+                        action_primitive.gripper_move_group_id
+                        or self.robot_view.get_gripper_movegroup_ids()[0]
+                    )
+                    kinematics = self.task.env.current_robot.kinematics
+                    for move_segment in action_primitive.move_segments:
+                        end_qpos = {name: value.copy() for name, value in qpos_snapshot.items()}
+                        end_qpos.update(move_segment.end_qpos)
+                        self.target_poses[move_segment.name] = kinematics.fk(
+                            end_qpos, base_pose_snapshot
+                        )[gripper_mg_id]
+        finally:
+            self.robot_view.base.pose = base_pose_snapshot
+            self.robot_view.set_qpos_dict(qpos_snapshot)
+            mujoco.mj_forward(self.task.env.current_model, self.task.env.current_data)
 
     def get_action(self, info: dict[str, Any]) -> dict[str, Any]:
         if self._check_for_failures():
@@ -507,6 +544,8 @@ class BaseObjectManipulationPlannerPolicy(PlannerPolicy):
         return action
 
     def get_phase(self) -> str:
+        if not self.action_primitives:
+            return "unknown"
         if self.action_idx < len(self.action_primitives):
             act_prim = self.action_primitives[self.action_idx]
         else:

@@ -55,6 +55,7 @@ class JsonEvalRunner(ParallelRolloutRunner):
     def patch_config(
         exp_config: MlSpacesExpConfig,
         episode_idx: int | None = None,
+        house_index: int | None = None,
         max_episodes: int | None = None,
         add_custom_object: bool = False,
         custom_object_path: str | Path | None = None,
@@ -89,6 +90,7 @@ class JsonEvalRunner(ParallelRolloutRunner):
         # eval_runtime_params is now a proper field in MlSpacesExpConfig, so normal assignment works
         exp_config.eval_runtime_params = EvalRuntimeParams(
             episode_idx=episode_idx,
+            house_index=house_index,
             max_episodes=max_episodes,
             add_custom_object=add_custom_object,
             custom_object_path=custom_object_path,
@@ -132,6 +134,15 @@ class JsonEvalRunner(ParallelRolloutRunner):
             )
 
         eval_params = exp_config.eval_runtime_params
+        if eval_params.house_index is not None:
+            all_episodes = [
+                ep for ep in all_episodes if ep.house_index == eval_params.house_index
+            ]
+            if not all_episodes:
+                raise ValueError(
+                    f"House {eval_params.house_index} not found in benchmark "
+                    f"at {self.benchmark_dir}"
+                )
         if eval_params.max_episodes is not None and len(all_episodes) > eval_params.max_episodes:
             log.info(
                 f"Limiting to first {eval_params.max_episodes} of {len(all_episodes)} episodes"
@@ -201,6 +212,13 @@ class JsonEvalRunner(ParallelRolloutRunner):
             return [], None
 
         eval_params = exp_config.eval_runtime_params
+
+        # House filtering must precede max_episodes so --max_episodes is scoped
+        # to the requested house rather than the beginning of the full benchmark.
+        if eval_params.house_index is not None:
+            all_episodes = [
+                ep for ep in all_episodes if ep.house_index == eval_params.house_index
+            ]
 
         # Truncate to max_episodes before any filtering
         if eval_params.max_episodes is not None and len(all_episodes) > eval_params.max_episodes:
@@ -349,6 +367,19 @@ class JsonEvalRunner(ParallelRolloutRunner):
                 "Planner/IK rollout failed; recording episode as unsuccessful: %s",
                 exc,
             )
+            task = kwargs.get("task")
+            if task is None and len(args) >= 2:
+                task = args[1]
+            # Policy.reset() plans before task.reset() caches its first frame.
+            # Preserve a diagnostic frame without resetting/retrying the policy
+            # or stepping the simulator. Existing partial rollouts stay intact.
+            if task is not None and not task.observation_cache:
+                try:
+                    observation, *_ = task.get_and_cache_all_step_information()
+                    task.frozen_config = task.config.freeze_task_config(observation, task=task)
+                    log.info("Captured planner-failure diagnostic frame (no actions executed)")
+                except Exception:
+                    log.exception("Could not capture planner-failure diagnostic frame")
             return False
 
     @staticmethod

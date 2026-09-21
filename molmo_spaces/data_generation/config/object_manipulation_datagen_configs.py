@@ -194,6 +194,14 @@ class PandaOmronPickAndPlaceDataGenConfig(PickAndPlaceDataGenConfig):
 class PandaOmronCuroboPickAndPlaceDataGenConfig(PandaOmronPickAndPlaceDataGenConfig):
     """PandaOmron pick-and-place using an in-process CuRobo planner."""
 
+    # CuRobo 规划的 move group。["arm"] 固定底盘与升降，只允许机械臂抓取；
+    # ["torso", "arm"] 放开升降；["base", "torso", "arm"] 全部可动。
+    planner_move_group_ids: list[str] = ["base", "torso", "arm"]
+    # 抓取 IK 与回 home 阶段允许移动的组。None 表示除夹爪外全部放开，会让底盘在
+    # 任务空间插值中平移；与 planner_move_group_ids 保持一致才能真正固定底盘与升降。
+    ik_unlocked_move_group_ids: list[str] = ["base", "torso", "arm"]
+    go_home_move_group_ids: list[str] = ["base", "torso", "arm"]
+
     policy_config: PandaOmronCuroboPickAndPlacePlannerPolicyConfig | None = None
 
     def _init_policy_config(self) -> PandaOmronCuroboPickAndPlacePlannerPolicyConfig:
@@ -221,16 +229,13 @@ class PandaOmronCuroboPickAndPlaceDataGenConfig(PandaOmronPickAndPlaceDataGenCon
             check_start_validity=False,
             enable_finetune_trajopt=True,
         )
-        planner_move_group_ids = (
-            self.policy_config.planner_move_group_ids
-            if isinstance(
-                self.policy_config, PandaOmronCuroboPickAndPlacePlannerPolicyConfig
-            )
-            else ["base", "torso", "arm"]
-        )
+        # 这三个 move group 字段以本配置顶部为准，policy_config 里的同名字段
+        # 不参与，避免两处配置产生分歧。
         return PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
             curobo_planner_config=planner_config,
-            planner_move_group_ids=planner_move_group_ids,
+            planner_move_group_ids=self.planner_move_group_ids,
+            ik_unlocked_move_group_ids=self.ik_unlocked_move_group_ids,
+            go_home_move_group_ids=self.go_home_move_group_ids,
             enable_collision_avoidance=True,
             server_urls=[],
             max_steps_per_waypoint=30,

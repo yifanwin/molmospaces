@@ -180,6 +180,35 @@ class PickAndPlacePlannerPolicyConfig(ObjectManipulationPlannerPolicyConfig):
             self.policy_factory = PickAndPlacePlannerPolicy
 
 
+class LLMWaypointPlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
+    """Configuration for OpenAI-compatible, locally validated waypoint plans."""
+
+    llm_max_api_calls: int = 3
+    api_timeout_s: float = 120.0
+    llm_max_grasp_candidates: int = 12
+    llm_max_waypoints: int = 32
+    llm_base_xy_limit_m: float = 2.0
+    llm_collision_sample_m: float = 0.03
+    llm_collision_sample_deg: float = 5.0
+
+    # Execution failures end the episode. API replanning is reserved for the
+    # pre-execution validation loop and can therefore never exceed three calls.
+    max_retries: int = 0
+    filter_colliding_grasps: bool = False
+    filter_feasible_grasps: bool = False
+    ik_unlocked_move_group_ids: list[str] | None = None
+    go_home_move_group_ids: list[str] = []
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        from molmo_spaces.policy.solvers.object_manipulation.llm_waypoint_planner_policy import (
+            LLMWaypointPlannerPolicy,
+        )
+
+        self.policy_cls = LLMWaypointPlannerPolicy
+        self.policy_factory = LLMWaypointPlannerPolicy
+
+
 class CuroboOpenClosePlannerPolicyConfig(OpenClosePlannerPolicyConfig):
     policy_cls: type = None  # Will be set in model_post_init to avoid circular imports
     left_curobo_planner_config: CuroboPlannerConfig | None = None  # will be set in model_post_init

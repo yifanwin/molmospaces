@@ -259,6 +259,12 @@ def get_args():
         help="The index of the episode to evaluate. If None, evaluates all episodes.",
     )
     parser.add_argument(
+        "--house_index",
+        type=int,
+        default=None,
+        help="Evaluate only episodes belonging to this benchmark house index.",
+    )
+    parser.add_argument(
         "--add_custom_object",
         action="store_true",
         help="Add a custom object to the episode.",
@@ -367,6 +373,7 @@ class EvalRuntimeParams:
     """
 
     episode_idx: int | None = None
+    house_index: int | None = None
     max_episodes: int | None = None
     add_custom_object: bool = False
     custom_object_path: str | Path | None = None
@@ -473,6 +480,7 @@ def run_evaluation(
     camera_names_override: list[str] | None = None,
     environment_light_intensity: float | None = None,
     episode_idx: int | None = None,
+    house_index: int | None = None,
     add_custom_object: bool = False,
     custom_object_path: str | Path | None = None,
     custom_object_name: str | None = None,
@@ -501,6 +509,7 @@ def run_evaluation(
         camera_names_override: Optional list of camera names to override
             policy_config.camera_names (e.g. ["randomized_zed2_analogue_1", "wrist_camera"]).
         episode_idx: Index of a specific episode to evaluate. If None, evaluates all episodes.
+        house_index: Optional benchmark house index. Filtering happens before max_episodes.
         add_custom_object: Whether to replace the target object with a custom object.
         custom_object_path: Path to the custom object XML file. Required if add_custom_object is True.
         custom_object_name: Natural language name for the custom object (e.g., 'lemon', 'cup').
@@ -549,7 +558,13 @@ def run_evaluation(
     # Load benchmark episodes (for summary info and validation)
     episodes = load_all_episodes(benchmark_dir)
 
-    # Validate episode index if specified
+    if house_index is not None:
+        episodes = [ep for ep in episodes if ep.house_index == house_index]
+        if not episodes:
+            raise ValueError(f"House {house_index} not found in benchmark at {benchmark_dir}")
+        log.info("Will evaluate house %d (%d episodes)", house_index, len(episodes))
+
+    # Validate episode index if specified (relative to the filtered episode list)
     if episode_idx is not None:
         if episode_idx < 0 or episode_idx >= len(episodes):
             raise ValueError(
@@ -649,6 +664,7 @@ def run_evaluation(
     exp_config = JsonEvalRunner.patch_config(
         exp_config=exp_config,
         episode_idx=episode_idx,
+        house_index=house_index,
         max_episodes=max_episodes,
         add_custom_object=add_custom_object,
         custom_object_path=custom_object_path,
@@ -765,6 +781,7 @@ def main() -> None:
         camera_config_override=eval_camera_config,
         camera_names_override=args.camera_names,
         episode_idx=args.idx,
+        house_index=args.house_index,
         add_custom_object=args.add_custom_object,
         custom_object_path=args.custom_object_path,
         custom_object_name=args.custom_object_name,

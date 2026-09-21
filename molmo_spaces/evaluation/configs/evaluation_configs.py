@@ -29,9 +29,14 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
+from typing import ClassVar
 
 from molmo_spaces.configs.abstract_exp_config import MlSpacesExpConfig
-from molmo_spaces.configs.policy_configs import BrownianMotionPolicyConfig, DummyPolicyConfig
+from molmo_spaces.configs.policy_configs import (
+    BrownianMotionPolicyConfig,
+    DummyPolicyConfig,
+    LLMWaypointPlannerPolicyConfig,
+)
 from molmo_spaces.configs.policy_configs_baselines import (
     CAPPolicyConfig,
     DreamZeroPolicyConfig,
@@ -59,6 +64,7 @@ from molmo_spaces.data_generation.config.nav_to_obj_configs import NavToObjDataG
 from molmo_spaces.data_generation.config.object_manipulation_datagen_configs import (
     FrankaPickAndPlaceDataGenConfig,
     PandaOmronCuroboPickAndPlaceDataGenConfig,
+    PandaOmronPickAndPlaceDataGenConfig,
 )
 from molmo_spaces.policy.dummy_policy import BrownianMotionPolicy, DummyPolicy
 from molmo_spaces.tasks.nav_task import NavToObjTask
@@ -98,6 +104,32 @@ class PandaOmronCuroboPickPnPEvalConfig(
                 "and curobo extras in the active environment."
             )
         self.policy_config.server_urls = []
+        self.robot_config.action_noise_config.enabled = False
+
+
+class PandaOmronLLMWaypointPickPnPEvalConfig(PandaOmronPickAndPlaceDataGenConfig):
+    """House-filterable PandaOmron evaluation using API-generated waypoints."""
+
+    requires_task_bound_policy: ClassVar[bool] = True
+    policy_config: LLMWaypointPlannerPolicyConfig = LLMWaypointPlannerPolicyConfig(
+        ik_unlocked_move_group_ids=["arm"],
+        go_home_move_group_ids=[],
+    )
+    filter_for_successful_trajectories: bool = False
+    end_on_success: bool = True
+    use_wandb: bool = False
+    policy_dt_ms: float = 66.0
+    ctrl_dt_ms: float = 2.0
+    sim_dt_ms: float = 2.0
+    task_horizon: int = 606
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        from molmo_spaces.policy.solvers.object_manipulation.llm_waypoint_planner_policy import (
+            validate_llm_environment,
+        )
+
+        validate_llm_environment(self.policy_config.api_timeout_s)
         self.robot_config.action_noise_config.enabled = False
 
 

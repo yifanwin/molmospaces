@@ -144,6 +144,20 @@ class RBY1LLMWaypointPickPnPEvalConfig(RBY1PickAndPlaceDataGenConfig):
             # The policy replaces this with the selected left/right arm before IK.
             ik_unlocked_move_group_ids=["left_arm"],
             go_home_move_group_ids=[],
+            # 抓取候选姿态本身可能与环境相交（house 4 的 grasp 阶段碰撞即此类）；
+            # 开启后由 add_auxiliary_objects 注入 grasp_collision_* 辅助体，
+            # 供 _candidate_grasps 用 get_noncolliding_grasp_mask 过滤。
+            filter_colliding_grasps=True,
+            # RBY1 只暴露顺序 IK（约 1.3 s/次），原值 3 次调用在候选池大、
+            # 校验反馈长时容易耗尽；提高到 8 次换取纠错机会。
+            llm_max_api_calls=8,
+            # 候选池过小会让 LLM 没有备选；配合 ik_checks 一起放大。
+            llm_max_grasp_candidates=24,
+            llm_max_grasp_ik_checks=96,
+            # RBY1 的 torso 初始为全 0，只解锁单臂时桌面目标够不到
+            # （实测 house 103 单臂残差 0.52 m / 172°，加 torso 后立即解出）。
+            # base 不动：本 policy 的直线插值不是避障导航器。
+            llm_ik_extra_groups=["torso"],
         )
 
     def model_post_init(self, __context) -> None:
@@ -154,8 +168,34 @@ class RBY1LLMWaypointPickPnPEvalConfig(RBY1PickAndPlaceDataGenConfig):
 
         if self.policy_config is None:
             self.policy_config = self._init_policy_config()
-        validate_llm_environment(self.policy_config.api_timeout_s)
+        # geometric 档不调 API，因此不能在这里做凭据预检——否则没有 LLM 环境变量
+        # 的机器上根本跑不了 A/B 对照。
+        if self.policy_config.llm_decision_source == "llm":
+            validate_llm_environment(self.policy_config.api_timeout_s)
         self.robot_config.action_noise_config.enabled = False
+
+
+class RBY1LLMWaypointPickPnPGeometricEvalConfig(RBY1LLMWaypointPickPnPEvalConfig):
+    """RBY1 对照档：同一套几何生成器，但决策来自本地几何默认值而非 LLM。
+
+    与 RBY1CuroboPickPnPEvalConfig（上界）和 RBY1LLMWaypointPickPnPEvalConfig
+    （LLM 决策）一起构成三档比较，用来回答"LLM 的高层决策相比几何默认值有没有
+    增量价值"。不需要任何 LLM 环境变量。
+    """
+
+    requires_task_bound_policy: ClassVar[bool] = True
+    policy_config: LLMWaypointPlannerPolicyConfig | None = None
+
+    def _init_policy_config(self) -> LLMWaypointPlannerPolicyConfig:
+        return super()._init_policy_config().model_copy(
+            update={
+                "llm_decision_source": "geometric",
+                # 底盘先停到物体 standoff 处再求解。不动底盘时，RBY1 的顺序差分 IK
+                # 必须靠 torso 去够桌面目标，实测会把 torso 解成自穿插构型
+                # （link_torso_2 撞 link_torso_4），本地碰撞预检直接判失败。
+                "llm_geometric_base_approach": True,
+            }
+        )
 
 
 class PandaOmronCuroboPickPnPEvalConfig(
@@ -204,8 +244,20 @@ class PandaOmronLLMWaypointPickPnPEvalConfig(PandaOmronPickAndPlaceDataGenConfig
             validate_llm_environment,
         )
 
-        validate_llm_environment(self.policy_config.api_timeout_s)
+        if self.policy_config.llm_decision_source == "llm":
+            validate_llm_environment(self.policy_config.api_timeout_s)
         self.robot_config.action_noise_config.enabled = False
+
+
+class PandaOmronLLMWaypointPickPnPGeometricEvalConfig(PandaOmronLLMWaypointPickPnPEvalConfig):
+    """PandaOmron 对照档：同一套几何生成器，决策来自本地几何默认值而非 LLM。"""
+
+    requires_task_bound_policy: ClassVar[bool] = True
+    policy_config: LLMWaypointPlannerPolicyConfig = LLMWaypointPlannerPolicyConfig(
+        ik_unlocked_move_group_ids=["arm"],
+        go_home_move_group_ids=[],
+        llm_decision_source="geometric",
+    )
 
 
 class JsonBenchmarkEvalConfig(MlSpacesExpConfig):

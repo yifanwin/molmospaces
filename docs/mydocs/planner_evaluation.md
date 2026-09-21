@@ -3,12 +3,44 @@
 RBY1 与 PandaOmron 的 oracle CuRobo / LLM waypoint 均由 molmospaces 维护，
 不再依赖 MolmoBot 的 `olmo` 配置或 `run_eval.py`。
 
-| 机器人 | CuRobo oracle | LLM waypoint |
-|---|---|---|
-| RBY1 | `RBY1CuroboPickPnPEvalConfig` | `RBY1LLMWaypointPickPnPEvalConfig` |
-| PandaOmron | `PandaOmronCuroboPickPnPEvalConfig` | `PandaOmronLLMWaypointPickPnPEvalConfig` |
+| 机器人 | CuRobo oracle | LLM 决策 | 几何对照（不调 API） |
+|---|---|---|---|
+| RBY1 | `RBY1CuroboPickPnPEvalConfig` | `RBY1LLMWaypointPickPnPEvalConfig` | `RBY1LLMWaypointPickPnPGeometricEvalConfig` |
+| PandaOmron | `PandaOmronCuroboPickPnPEvalConfig` | `PandaOmronLLMWaypointPickPnPEvalConfig` | `PandaOmronLLMWaypointPickPnPGeometricEvalConfig` |
 
 配置模块统一为 `molmo_spaces.evaluation.configs.evaluation_configs`。
+
+## LLM 的职责边界
+
+LLM 是**高层 last-mile 决策器**，不输出任何 waypoint：
+
+```
+LLM high-level decision -> deterministic geometric waypoint generation
+                        -> MuJoCo IK / collision validation -> execution
+```
+
+模型只回答 `grasp_candidate_id`、`arm`、`approach_strategy`、`lift_height`、
+`preplace_height`，以及可选的 `base_approach_goal` / `base_transfer_goal`。
+六个 EE 目标与底盘目标由 `build_plan_from_decision` 确定性展开；grasp pose 直接取
+所选候选，模型无法修改。校验失败时模型只能调整上述高层旋钮，改不了轨迹点。
+`approach_strategy` 不改变生成的几何，只用于校验候选姿态与所声称策略是否一致。
+
+`geometric` 档（两个 `...GeometricEvalConfig`）走完全相同的展开与预检链路，但决策
+来自本地几何默认值，因此不需要任何 LLM 环境变量，用于回答"LLM 的高层决策相比几何
+默认值有没有增量价值"。
+
+## mock fixture 契约
+
+`mock` 模式需要 `LLM_MOCK_RESPONSE_FILE`，内容必须是 **`LLMDecision`** 而不是旧的
+waypoint plan。最小形状见 `mlspaces_tests/evaluation/llm_decision_mock.json`：
+
+```json
+{"schema_version": 1, "robot": "rby1", "arm": "left_arm", "grasp_candidate_id": 0,
+ "approach_strategy": "lateral", "lift_height": 0.35, "preplace_height": 0.08}
+```
+
+给旧格式（含 `segments` 数组）时客户端会在构造阶段直接报错。mock 每次返回同一份
+内容，所以反馈循环在 mock 下无法自愈，只能验证管线连通，不验证纠错能力。
 
 从 molmospaces 目录执行：
 

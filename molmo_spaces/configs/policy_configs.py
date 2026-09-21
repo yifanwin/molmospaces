@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from pydantic import model_validator
@@ -186,10 +186,55 @@ class LLMWaypointPlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     llm_max_api_calls: int = 3
     api_timeout_s: float = 120.0
     llm_max_grasp_candidates: int = 12
+    # RBY1 只暴露顺序 IK（约 1.3 s/次），因此不能对全部抓取做可达性检查。
+    # 该上限决定最多用 IK 检查多少个候选：从最近的开始逐批扩大，
+    # 直到集满 llm_max_grasp_candidates 个可达候选或达到本上限。
+    # 取值过小会让候选池在 IK 阶段就耗尽（house 103 曾因此 0 候选）。
+    llm_max_grasp_ik_checks: int = 96
+    # 除选定的臂之外，IK 额外解锁的关节组（贯穿候选可达性检查、计划预检
+    # 与执行时的 TCP 求解，三处口径必须一致）。
+    # RBY1 的 torso 初始为全 0，只解锁单臂时桌面目标够不到——实测 house 103
+    # 单臂残差 0.52 m / 172°，加上 torso 后同一候选立即解出。
+    # 数据生成与 CuRobo 路径同样让 torso/base 参与
+    # （见 object_manipulation_datagen_configs.py 的 ik_unlocked_move_group_ids
+    # 与 rby1m_*_arm_holobase.yml）。本 policy 的直线插值不是避障导航器，
+    # 因此只解锁 torso，不动 base。
+    llm_ik_extra_groups: list[str] = []
+    # 保留字段：waypoint 现在由本地几何确定性地展开（固定 6-8 段），不再由模型
+    # 输出，因此这个上限不再参与校验。留着是为了让旧的 config 快照仍能反序列化。
     llm_max_waypoints: int = 32
     llm_base_xy_limit_m: float = 2.0
     llm_collision_sample_m: float = 0.03
     llm_collision_sample_deg: float = 5.0
+
+    # 决策来源。llm = 调 API 要高层决策；geometric = 不调 API，直接用本地几何
+    # 默认决策（最近的可行候选 + 复刻 baseline 的目标高度）。两档走完全相同的
+    # 几何展开与 IK/碰撞预检，因此可用于控制变量的 A/B 对照；geometric 档在没有
+    # LLM_BASE_URL/LLM_API_KEY/LLM_MODEL 的环境里也能跑。
+    llm_decision_source: Literal["llm", "geometric"] = "llm"
+    # pregrasp 沿抓取接近轴的退避距离。None = 复用 pregrasp_z_offset，与几何
+    # baseline 逐位一致。模型自创的 pregrasp 曾达 0.29-0.39 m，顺序差分 IK 从
+    # 那么远的种子出发会把 torso 解成自穿插构型。
+    llm_pregrasp_standoff_m: float | None = None
+    # approach_strategy="top_down" 时允许的接近轴倾角上限（与 world -Z 的夹角）。
+    # 超限即判该候选不是顶抓，把"改用 lateral 或换候选"反馈给模型。
+    llm_top_down_max_tilt_deg: float = 20.0
+    # lift_height（相对 grasp 位姿的抬升量）的取值范围。下界通常由场景几何决定
+    # （见 candidates 的 min_lift_height_m），这里只兜住荒谬值；上界防止抬到天花板。
+    llm_lift_height_bounds: tuple[float, float] = (0.0, 0.60)
+    # preplace_height（相对 place 位姿的高度）的取值范围。preplace 必须高于 place，
+    # 否则水平移动会拖着物体扫过容器沿。
+    llm_preplace_height_bounds: tuple[float, float] = (0.0, 0.30)
+    # 由底盘目标距离推算 base 段的 duration_s（clip 到 2-8 s）。
+    llm_base_speed_mps: float = 0.30
+    # 推荐底盘位姿：停在目标 standoff 距离处、yaw 面向目标。作为几何先验写进
+    # prompt，模型仍可自行决定是否采用。
+    llm_base_standoff_target_m: float = 0.75
+    # 单次底盘移动的最大平移量，应 <= llm_base_xy_limit_m。
+    llm_base_step_limit_m: float = 1.0
+    # geometric 档是否使用推荐底盘位姿。默认 False = 与几何 baseline 一样不动底盘，
+    # 保证 geometric 档与 baseline 逐位可比；打开后得到"几何 + 移动底盘"的更强下界。
+    llm_geometric_base_approach: bool = False
 
     # Execution failures end the episode. API replanning is reserved for the
     # pre-execution validation loop and can therefore never exceed three calls.

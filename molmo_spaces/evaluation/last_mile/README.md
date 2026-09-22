@@ -79,3 +79,17 @@ bash scripts/evaluation/run_last_mile_p1.sh all
 运行器在每个 4 ms 仿真步检查非法接触、目标物体位姿和非底盘实际关节位置。非底盘漂移是相对导航开始状态的物理 joint position，而不是仅检查控制器 target；阈值为 `1e-3`。终止分类优先级为 `controller_error → collision → scene_changed → no_path/completed → timeout`。只有 `completed` 且通过终点误差与恢复检查时才写入 `A_snapshot.npz`。
 
 结果可断点续跑，但必须通过输入、实现和逐条产物哈希校验。`COMPLETE.json` 只表示 10 条均完成唯一分类。P2 gate 仅在 `valid_A >= 5` 时开放，P1 入口本身不会启动 P2。验收报告见 `docs/last_mile_p1_e01_20260921.md`。
+
+## P2-E02：独立分层可行性评价器
+
+```bash
+bash scripts/evaluation/run_last_mile_p2.sh test
+P1_ROOT="$PWD/eval_output/last_mile/p1_20260921/E04" \
+  OUTPUT="$PWD/eval_output/last_mile/p2_20260922/E02" \
+  bash scripts/evaluation/run_last_mile_p2.sh run
+```
+
+评价器固定底盘、torso 和未使用手臂，依次检查 `F_base / F_IK / F_approach /
+F_lift_proxy`。抓取池在物体坐标系只生成一次；抬升代理会移动虚拟附着目标并检查
+扫掠碰撞。`not_found` 只表示有限协议未找到完整链。验收报告见
+`docs/last_mile_p2_e02_20260922.md`。

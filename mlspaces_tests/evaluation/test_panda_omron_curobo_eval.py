@@ -205,3 +205,145 @@ def test_panda_omron_eval_override_widens_base_placement_search():
 
     assert runtime.robot_base_pose_repair_map_radius >= 0.438
     assert runtime.robot_base_pose_repair_candidate_limit > 1
+
+
+def test_datagen_and_eval_share_the_same_grasp_settle_window():
+    """DataGen 与 Eval 必须用同一个抓取判定窗口。
+
+    修复一度只落在 Eval config 上，DataGen 侧仍是默认的 5 步 = 330 ms，
+    短于 500 ms 的夹爪闭合时长。
+    """
+    import pytest as _pytest
+
+    from molmo_spaces.configs.policy_configs import grasp_settle_steps
+    from molmo_spaces.data_generation.config.object_manipulation_datagen_configs import (
+        PandaOmronCuroboPickAndPlaceDataGenConfig,
+    )
+
+    _pytest.importorskip("robosuite")
+    config = PandaOmronCuroboPickAndPlaceDataGenConfig()
+    policy_config = config._init_policy_config()
+
+    expected = grasp_settle_steps(
+        config.policy_dt_ms, policy_config.gripper_close_duration
+    )
+    assert policy_config.max_grasping_timesteps == expected
+    # 判定窗口必须覆盖夹爪闭合时长
+    window_s = policy_config.max_grasping_timesteps * config.policy_dt_ms / 1000.0
+    assert window_s >= policy_config.gripper_close_duration
+
+
+def test_velocity_clip_scales_with_policy_dt_not_hardcoded_10hz():
+    """速度限制按实际控制周期换算：66 ms 下每步位移应比 100 ms 标定值小 34%。"""
+    import numpy as np
+
+    from molmo_spaces.policy.solvers.curobo_planner_policy import CuroboPlannerPolicy
+
+    class _StubPolicy(CuroboPlannerPolicy):
+        """只用来测 clip_to_velocity_constraint，补齐抽象方法。"""
+
+        @property
+        def planners(self):
+            return {}
+
+        @property
+        def is_done(self):
+            return False
+
+        def get_action(self, info):
+            return {}
+
+        def get_phase(self):
+            return None
+
+        def get_all_phases(self):
+            return {}
+
+    def build(policy_dt_ms):
+        policy = object.__new__(_StubPolicy)
+        policy.config = SimpleNamespace(
+            policy_dt_ms=policy_dt_ms,
+            policy_config=SimpleNamespace(velocity_constraints={"arm": 0.5}),
+        )
+        group = SimpleNamespace(joint_pos=np.zeros(7))
+        policy.task = SimpleNamespace(
+            env=SimpleNamespace(
+                robots=[SimpleNamespace(robot_view=SimpleNamespace(get_move_group=lambda _g: group))]
+            )
+        )
+        return policy
+
+    # 远大于限制的目标位移 → 应被裁剪到上限
+    clipped_66 = build(66.0).clip_to_velocity_constraint({"arm": np.full(7, 5.0)})
+    clipped_100 = build(100.0).clip_to_velocity_constraint({"arm": np.full(7, 5.0)})
+
+    assert clipped_100["arm"][0] == pytest.approx(0.5)  # 100 ms 标定值
+    assert clipped_66["arm"][0] == pytest.approx(0.5 * 0.66)  # 66 ms 按比例缩小
+    assert clipped_66["arm"][0] < clipped_100["arm"][0]
+
+
+def test_object_pose_hold_flags_drift_relative_to_gripper():
+    """抓取保持判据：物体相对夹爪的位姿漂移超阈值即判为未抓住。
+
+    这替代"两侧手指都接触"的几何代理：单侧接触但物体被稳住时不应误伤，
+    而手指顶住桌面（物体相对夹爪漂移）必须被识别。
+    """
+    import numpy as np
+
+    from molmo_spaces.policy.solvers.curobo_planner_policy import CuroboPlannerPolicy
+
+    class _StubPolicy(CuroboPlannerPolicy):
+        @property
+        def planners(self):
+            return {}
+
+        @property
+        def is_done(self):
+            return False
+
+        def get_action(self, info):
+            return {}
+
+        def get_phase(self):
+            return None
+
+        def get_all_phases(self):
+            return {}
+
+    def build(require_hold=True):
+        policy = object.__new__(_StubPolicy)
+        policy.config = SimpleNamespace(
+            policy_config=SimpleNamespace(
+                require_object_pose_hold=require_hold,
+                grasp_hold_pos_tolerance=0.01,
+                grasp_hold_rot_tolerance=0.10,
+            )
+        )
+        policy._grasp_reference = np.eye(4)
+        return policy
+
+    reference = np.eye(4)
+
+    # 未漂移 → 仍算抓住
+    policy = build()
+    policy._object_relative_pose = lambda: reference.copy()
+    assert policy._object_pose_held() is True
+
+    # 位置漂移 2 cm（阈值 1 cm）→ 判定未抓住
+    drifted = reference.copy()
+    drifted[0, 3] = 0.02
+    policy._object_relative_pose = lambda: drifted.copy()
+    assert policy._object_pose_held() is False
+
+    # 姿态漂移 30°（阈值 5.7°）→ 判定未抓住
+    from scipy.spatial.transform import Rotation as _R
+
+    tilted = reference.copy()
+    tilted[:3, :3] = _R.from_euler("x", np.radians(30)).as_matrix()
+    policy._object_relative_pose = lambda: tilted.copy()
+    assert policy._object_pose_held() is False
+
+    # 关闭该判据时一律放行
+    policy_off = build(require_hold=False)
+    policy_off._object_relative_pose = lambda: drifted.copy()
+    assert policy_off._object_pose_held() is True

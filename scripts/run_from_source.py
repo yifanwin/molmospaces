@@ -13,9 +13,12 @@
     cd <装好 venv 的项目根目录>
     .venv/bin/python scripts/run_from_source.py \\
         --source /data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4 \\
-        molmo_spaces.evaluation.eval_main -- --idx 116 --no_wandb
+        molmo_spaces.evaluation.eval_main -- \\
+        molmo_spaces.evaluation.configs.evaluation_configs:PandaOmronCuroboPickPnPEvalConfig \\
+        --idx 116 --no_wandb
 
-``--`` 之后的参数会原样传给目标模块。
+``--`` 之后的第一个参数是该模块自己的位置参数（这里是 exp_config_cls），
+其余原样透传。
 """
 
 from __future__ import annotations

@@ -343,6 +343,16 @@ class CuroboPickAndPlacePlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     max_planning_reattempts: int = 5
     gripper_closed_pos: float = 0.0  # [m]
     gripper_closed_tolerance: float = 0.005  # [m]
+    # 抓取判定是否额外要求"两侧手指都接触目标物体"。默认关闭，保持"夹爪没合到底
+    # 即视为抓住"的既有行为；打开后能过滤掉手指顶住桌面/柜台、或只有单侧接触这类
+    # 假阳性，代价是会拒掉一部分"单侧凑巧够用"的抓取。
+    require_two_finger_contact: bool = False
+    # 抓取保持判据：以"物体相对夹爪的位姿是否漂移"为准（比手指接触几何更本质，
+    # 见 CuroboPlannerPolicy._object_pose_held）。单侧接触但物体被稳定约束时算抓住，
+    # 手指顶住桌面这类假阳性会让物体明显漂移。默认关闭以保持既有行为。
+    require_object_pose_hold: bool = False
+    grasp_hold_pos_tolerance: float = 0.01  # [m] 相对位姿允许的位置漂移
+    grasp_hold_rot_tolerance: float = 0.10  # [rad] 相对位姿允许的姿态漂移
     velocity_constraints: dict[str, float] = {
         "base": 0.5,  # [m / policy_dt_ms]
         "head": 0.5,  # [rad / policy_dt_ms]
@@ -437,6 +447,13 @@ class PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
     # 与低矮物体上直接压到支撑面，实测触发 6 个接触、关节差 0.04–0.14 rad 到不了，
     # 反复重试后 episode 失败（E4 日志 2849 次 waypoint 超时 / 449 次重试耗尽）。
     grasp_approach_overshoot: float = 0.0
+    # E4 实测：夹爪"没合到底"往往不是夹住了物体，而是手指 pad 顶住了 countertop
+    # （gripper0_right_finger1_pad_collision ↔ countertop），或目标物体只有单侧手指
+    # 接触，随后 LIFT 阶段掉落。改用"物体相对夹爪是否漂移"这一本质判据：
+    # 它既挡得住上述假阳性，又不会误伤"单侧接触但物体确实被稳住"的抓取
+    # —— ladle 实测正是这种单侧但仍可用的情形。
+    require_two_finger_contact: bool = False
+    require_object_pose_hold: bool = True
     gripper_open_command: list[float] = [0.04, -0.04]
     gripper_close_command: list[float] = [0.0, 0.0]
     velocity_constraints: dict[str, float] = {

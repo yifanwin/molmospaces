@@ -71,6 +71,9 @@ PandaOmron 的 `pregrasp_z_offset` 已是 0.10 m，再额外进给 0.01 m 会让
 | 3 | `configs/policy_configs.py` + `policy/solvers/object_manipulation/curobo_pick_and_place_planner_policy.py` | 把写死的 `+ 0.01` 进给提为 `grasp_approach_overshoot` 配置项；**PandaOmron 置 0.0**，RBY1 保持 0.01（不影响 E2） |
 | 4 | `policy/solvers/curobo_planner_policy.py` | `[TIMEOUT]` 日志增加三类诊断：**关节级误差**、**外部接触对**、**各组关节速度**，用于区分"被挡住"与"伺服跟不上" |
 | 5 | `utils/scene_maps.py` + `env.py` + `evaluation/eval_main.py` + `evaluation/robot_eval_overrides.py` | **基座放置策略**：扩大粗筛半径并新增底盘净空择优（详见 §2.1） |
+| 6 | `policy/solvers/curobo_planner_policy.py` + `policy/solvers/object_manipulation/curobo_pick_and_place_planner_policy.py` + `configs/policy_configs.py` | **抓取保持判据**：改用"物体相对夹爪位姿是否漂移"，替代"手指接触几何"（详见 §2.2） |
+| 7 | `data_generation/config/object_manipulation_datagen_configs.py` | DataGen 侧同步抓取判定窗口（与 Eval 共用 `grasp_settle_steps`） |
+| 8 | `policy/solvers/curobo_planner_policy.py` | `clip_to_velocity_constraint` 按 `policy_dt_ms` 换算，去掉硬编码的 10 Hz |
 
 修复 1 的日志形态（实测）：
 
@@ -114,6 +117,48 @@ episode 反复重试后失败（E4 的 idx 213 即为此类）。
 
 **零影响保证**：`candidate_limit=1` 时行为与改动前完全一致（仍是"取第一个可行点"），
 只有 PandaOmron 的评测覆盖会启用择优，其余机器人、数据生成与导航路径不受影响。
+
+### 2.2 抓取保持判据：从"手指接触几何"改为"物体相对夹爪位姿"
+
+**问题**：`_grasping_something()` 只判断"夹爪是否偏离闭合位"，会产生两类假阳性：
+
+1. 手指还在闭合途中；
+2. **只有一侧手指顶在桌面/柜台上**（或只与目标物体单侧接触）导致夹爪合不拢。
+
+E4 实测证据（来自 `_describe_stall` 的接触诊断）：
+
+```
+外部接触(1 对): gripper0_right_finger1_pad_collision ↔ countertop_6f83bf98...×2
+```
+
+加严判定后进一步暴露出单侧接触是常态：
+
+```
+[GRIPPER] 夹爪未合拢，但与目标物体的接触只来自 ['finger1']；接触几何: ['countertop_...']
+[GRIPPER] ... 只来自 ['finger2'] ...
+[GRIPPER] ... 只来自 无手指 ...
+```
+
+**先试过"双侧接触"（`require_two_finger_contact`），但它会误伤**：ladle 实测就是
+"单侧接触但物体确实被稳住"的情形——同一 episode 两次运行，一次连续 10 次被拒后
+失败、一次通过并最终成功。说明"几何接触"只是代理量，不是本质判据。
+
+**改用本质判据**：物体是否**真的随夹爪运动**。
+
+| 环节 | 做法 |
+|---|---|
+| 快照 | GRASP 判定通过时记录 `T_rel = T_tcp⁻¹ · T_object`（物体在夹爪坐标系下的位姿） |
+| 复查 | LIFT 轨迹执行完、PLACE 开始时重新计算，位置漂移 > **1 cm** 或姿态漂移 > **5.7°** 即判为未抓住 |
+| 好处 | 单侧接触但物体被稳住 → 不误伤；手指顶桌面 → 物体必然相对夹爪漂移 → 挡得住 |
+
+**实现**：
+
+- `curobo_planner_policy.py`：`_capture_grasp_reference()` / `_object_relative_pose()` /
+  `_object_pose_held()` / `_grasp_still_valid()`
+- `curobo_pick_and_place_planner_policy.py`：GRASP 判定成功时快照；LIFT / PLACE 的检查
+  从 `_grasping_something()` 改为 `_grasp_still_valid()`
+- 配置：`require_object_pose_hold`（基类默认 `False`，不影响其他机器人）、
+  `grasp_hold_pos_tolerance=0.01`、`grasp_hold_rot_tolerance=0.10`；PandaOmron 置 `True`
 
 ## 3. 验证
 
@@ -245,6 +290,7 @@ CUDA_VISIBLE_DEVICES=3 MUJOCO_EGL_DEVICE_ID=3 OMP_NUM_THREADS=1 OPENBLAS_NUM_THR
 .venv/bin/python /data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4/scripts/run_from_source.py \
   --source /data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4 \
   molmo_spaces.evaluation.eval_main -- \
+  molmo_spaces.evaluation.configs.evaluation_configs:PandaOmronCuroboPickPnPEvalConfig \
   --benchmark_dir /nas/wenyifan/molmospaces_data/cache/benchmarks/molmospaces-bench-v1/20260408/procthor-10k/FrankaPickandPlaceDroidMiniBench/FrankaPickandPlaceDroidMiniBench_20260111_json_benchmark \
   --idx 116 --task_horizon_steps 606 --num_workers 1 --no_wandb \
   --output_dir eval_output/e4_verify

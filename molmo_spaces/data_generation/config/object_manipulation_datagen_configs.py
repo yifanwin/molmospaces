@@ -36,6 +36,7 @@ from molmo_spaces.configs.policy_configs import (
     PandaOmronCuroboPickAndPlacePlannerPolicyConfig,
     PickAndPlacePlannerPolicyConfig,
     PickPlannerPolicyConfig,
+    grasp_settle_steps,
 )
 from molmo_spaces.configs.robot_configs import (
     FloatingRUMRobotConfig,
@@ -231,7 +232,7 @@ class PandaOmronCuroboPickAndPlaceDataGenConfig(PandaOmronPickAndPlaceDataGenCon
         )
         # 这三个 move group 字段以本配置顶部为准，policy_config 里的同名字段
         # 不参与，避免两处配置产生分歧。
-        return PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
+        policy_config = PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
             curobo_planner_config=planner_config,
             planner_move_group_ids=self.planner_move_group_ids,
             ik_unlocked_move_group_ids=self.ik_unlocked_move_group_ids,
@@ -243,6 +244,14 @@ class PandaOmronCuroboPickAndPlaceDataGenConfig(PandaOmronPickAndPlaceDataGenCon
             grasp_collision_max_grasps=2000,
             grasp_feasibility_max_grasps=512,
         )
+        # 抓取判定必须等夹爪闭合完成才能做：判据是"夹爪位置偏离闭合位"，而闭合
+        # 过程中仍在运动的手指同样偏离闭合位。DataGen 侧原先沿用默认的 5 步，
+        # 即 5 × 66 ms = 330 ms，短于 500 ms 的闭合时长，会提前判定"已抓住"。
+        # 与 Eval config 用同一个换算函数，避免两边再次分叉。
+        policy_config.max_grasping_timesteps = grasp_settle_steps(
+            self.policy_dt_ms, policy_config.gripper_close_duration
+        )
+        return policy_config
 
     @property
     def tag(self) -> str:

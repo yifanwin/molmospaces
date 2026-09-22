@@ -604,6 +604,9 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
                         log.info(
                             f"Object successfully grasped after {self.grasping_timesteps} timesteps"
                         )
+                        # 记录抓取瞬间物体在夹爪坐标系下的位姿；LIFT 阶段据此判断
+                        # 物体是否真的跟着夹爪走（见 _object_pose_held）。
+                        self._capture_grasp_reference()
                         self.current_phase = PickAndPlacePhase.LIFT
                         self.planned_trajectory = self.planned_trajectory[::-1]
                         self.trajectory_index = 0
@@ -641,9 +644,13 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
             if self.trajectory_index < len(self.planned_trajectory):
                 return self._execute_trajectory(self._gripper_action(open_gripper=False))
             else:
-                if not self._grasping_something():
-                    # Object not grasped, move back to reach pre-grasp phase
-                    log.warning("Object not grasped during lift phase, returning to pre-grasp")
+                if not self._grasp_still_valid():
+                    # 物体没跟上来：夹爪判据失败，或物体相对夹爪的位姿已漂移
+                    # （见 _object_pose_held）。打印接触与关节状态辅助归因。
+                    log.warning(
+                        "Object not grasped during lift phase, returning to pre-grasp (%s)",
+                        self._describe_stall(),
+                    )
                     self.pre_grasp_poses = self._get_pregrasp_poses()
                     self.current_phase = PickAndPlacePhase.PREGRASP
                     self.planned_trajectory = None
@@ -692,8 +699,8 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         return self._execute_trajectory(self._gripper_action(open_gripper=True))
 
     def _execute_place_phase(self) -> dict[str, Any]:
-        if not self._grasping_something():
-            # Object not grasped, move back to reach pre-grasp phase
+        if not self._grasp_still_valid():
+            # 物体不再随夹爪（判据同 LIFT 阶段），退回 pre-grasp 重抓
             log.warning("Object lost during place phase, returning to pre-grasp")
             self.pre_grasp_poses = self._get_pregrasp_poses()
             self.current_phase = PickAndPlacePhase.PREGRASP

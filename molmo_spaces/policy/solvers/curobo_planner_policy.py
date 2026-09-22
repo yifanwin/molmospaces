@@ -49,6 +49,10 @@ class CuroboPlannerPolicy(PlannerPolicy):
         # Gripper state
         self.current_gripper_command: dict[str, float] = {}
 
+        # 抓取瞬间"物体在夹爪坐标系下的位姿"，用于判断物体是否真的随夹爪运动。
+        # None 表示尚未记录（LIFT 之前或本回合没做过抓取判定）。
+        self._grasp_reference: np.ndarray | None = None
+
         # Profiler
         self.profiler = Profiler()
 
@@ -75,6 +79,7 @@ class CuroboPlannerPolicy(PlannerPolicy):
         self.steps_spent_in_waypoint = 0
         self._retry_count = 0
         self.current_gripper_command = {}
+        self._grasp_reference = None
 
     # ========== Joint Position Methods ==========
 
@@ -433,9 +438,17 @@ class CuroboPlannerPolicy(PlannerPolicy):
         velocity_constraints = getattr(self.config.policy_config, "velocity_constraints", {})
         clipped_action = action.copy()
 
+        # velocity_constraints 的数值按 100 ms 的控制周期标定（见 policy_configs 的注释）。
+        # 这里曾把 10 Hz 硬编码进换算，而 PandaOmron 的 policy_dt_ms 是 66 ms
+        # （15.15 Hz），于是每步允许的变化量比设定值大 52%——LIFT 起步更猛，本来
+        # 就"勉强夹住"的物体更容易被甩掉。改为按实际控制周期换算。
+        step_s = self.config.policy_dt_ms / 1000.0
+        constraint_ref_s = 0.1
+        step_scale = step_s / constraint_ref_s
+
         for move_group, commanded_action in action.items():
             if move_group in velocity_constraints:
-                max_velocity_rad_per_s = velocity_constraints[move_group]
+                max_delta_per_step = velocity_constraints[move_group] * step_scale
                 move_group_view = self.task.env.robots[0].robot_view.get_move_group(move_group)
                 move_group_joint_pos = move_group_view.joint_pos.copy()
 
@@ -445,15 +458,8 @@ class CuroboPlannerPolicy(PlannerPolicy):
                     # Normalize theta difference to [-π, π]
                     diff[2] = np.arctan2(np.sin(diff[2]), np.cos(diff[2]))
 
-                velocity_rad_per_s = diff * 10.0
-
-                # Clip velocity and recalculate commanded action
-                clipped_velocity = np.clip(
-                    velocity_rad_per_s, -max_velocity_rad_per_s, max_velocity_rad_per_s
-                )
-                commanded_action = move_group_joint_pos + clipped_velocity / 10.0
-
-                clipped_action[move_group] = commanded_action
+                clipped_delta = np.clip(diff, -max_delta_per_step, max_delta_per_step)
+                clipped_action[move_group] = move_group_joint_pos + clipped_delta
 
         return clipped_action
 
@@ -494,7 +500,130 @@ class CuroboPlannerPolicy(PlannerPolicy):
             f"deviation: {gripper_deviation_from_closed:.4f}, grasping: {is_grasping}"
         )
 
-        return is_grasping
+        if not is_grasping:
+            return False
+
+        # 仅凭"夹爪没合到底"会产生两类假阳性：手指还在闭合途中，或只有一侧手指
+        # 顶在桌面/柜台/其他几何上导致夹爪合不拢。E4 实测出现过
+        # gripper0_right_finger1_pad_collision 顶住 countertop、以及目标物体只有
+        # 单侧手指接触，两种情况下夹爪照样判为已抓取。是否要求双侧接触由配置决定：
+        # 它更严格但会拒掉一部分"单侧凑巧够用"的抓取，默认关闭以保持既有行为。
+        if not getattr(self.config.policy_config, "require_two_finger_contact", False):
+            return True
+        pickup_name = getattr(self.config.task_config, "pickup_obj_name", None)
+        if pickup_name is None:
+            return True
+        finger_sides = self._finger_sides_contacting(pickup_name)
+        if len(finger_sides) < 2:
+            log.warning(
+                "[GRIPPER] 夹爪未合拢，但与目标物体的接触只来自 %s；"
+                "与目标物体的接触几何: %s，判定为未抓取",
+                sorted(finger_sides) or "无手指",
+                self._object_contact_geoms(pickup_name),
+            )
+            return False
+        return True
+
+    def _object_contact_geoms(self, object_name: str) -> list[str]:
+        """列出所有与目标物体接触的对方几何名，用于诊断抓取判定。"""
+        env = self.task.env
+        data = env.current_data
+        model = data.model
+        pickup = env.object_managers[env.current_batch_index].get_object_by_name(object_name)
+
+        geoms: list[str] = []
+        for i in range(data.ncon):
+            contact = data.contact[i]
+            root1 = model.body_rootid[model.geom_bodyid[contact.geom1]]
+            root2 = model.body_rootid[model.geom_bodyid[contact.geom2]]
+            if (root1 == pickup.body_id) == (root2 == pickup.body_id):
+                continue
+            other = contact.geom2 if root1 == pickup.body_id else contact.geom1
+            geoms.append(model.geom(other).name or f"geom{other}")
+        return geoms[:4]
+
+    # 手指标识子串：Panda 是 finger1/finger2（注意两个手指名里都含 "right"，
+    # 因此不能按 left/right 区分），RBY1 系是 left_finger/right_finger。
+    _FINGER_ID_PATTERNS = ("finger1", "finger2", "finger_l", "finger_r", "left_finger", "right_finger")
+
+    def _finger_sides_contacting(self, object_name: str) -> set[str]:
+        """返回与目标物体接触的手指标识集合（如 {"finger1", "finger2"}）。"""
+        env = self.task.env
+        data = env.current_data
+        model = data.model
+        pickup = env.object_managers[env.current_batch_index].get_object_by_name(object_name)
+
+        sides: set[str] = set()
+        for i in range(data.ncon):
+            contact = data.contact[i]
+            root1 = model.body_rootid[model.geom_bodyid[contact.geom1]]
+            root2 = model.body_rootid[model.geom_bodyid[contact.geom2]]
+            if (root1 == pickup.body_id) == (root2 == pickup.body_id):
+                continue
+            robot_geom = contact.geom2 if root1 == pickup.body_id else contact.geom1
+            geom_name = (model.geom(robot_geom).name or "").lower()
+            for pattern in self._FINGER_ID_PATTERNS:
+                if pattern in geom_name:
+                    sides.add(pattern)
+                    break
+        return sides
+
+    # ========== 抓取保持判据 ==========
+
+    def _grasp_still_valid(self) -> bool:
+        """抓取是否仍然成立：夹爪判据 + 物体相对位姿未漂移。"""
+        if not self._grasping_something():
+            return False
+        return self._object_pose_held()
+
+    def _capture_grasp_reference(self) -> None:
+        """记录抓取瞬间物体在夹爪坐标系下的位姿，供 LIFT 阶段比对。"""
+        self._grasp_reference = self._object_relative_pose()
+
+    def _object_relative_pose(self) -> np.ndarray | None:
+        """目标物体在夹爪（TCP）坐标系下的位姿；拿不到目标物体时返回 None。"""
+        pickup_name = getattr(self.config.task_config, "pickup_obj_name", None)
+        if pickup_name is None:
+            return None
+        env = self.task.env
+        pickup = env.object_managers[env.current_batch_index].get_object_by_name(pickup_name)
+        tcp_pose = env.current_robot.robot_view.get_move_group(
+            self.gripper_move_group_id
+        ).leaf_frame_to_world
+        return np.linalg.inv(tcp_pose) @ pickup.pose
+
+    def _object_pose_held(self) -> bool:
+        """物体是否仍相对夹爪保持在抓取瞬间的位姿。
+
+        这比"两侧手指是否都接触物体"更本质：单侧接触但物体被稳定约束时同样算
+        抓住；而手指顶住桌面/柜台这类假阳性会让物体相对夹爪明显漂移。是否启用由
+        policy_config.require_object_pose_hold 控制，阈值默认 1 cm / 5.7°。
+        """
+        if not getattr(self.config.policy_config, "require_object_pose_hold", False):
+            return True
+        if self._grasp_reference is None:
+            return True
+        current = self._object_relative_pose()
+        if current is None:
+            return True
+
+        pos_drift = float(np.linalg.norm(current[:3, 3] - self._grasp_reference[:3, 3]))
+        rot_drift = float(
+            R.from_matrix(current[:3, :3] @ self._grasp_reference[:3, :3].T).magnitude()
+        )
+        pos_tol = getattr(self.config.policy_config, "grasp_hold_pos_tolerance", 0.01)
+        rot_tol = getattr(self.config.policy_config, "grasp_hold_rot_tolerance", 0.1)
+
+        if pos_drift > pos_tol or rot_drift > rot_tol:
+            log.warning(
+                "[GRASP] 物体相对夹爪漂移 %.4f m / %.1f°（阈值 %.4f m / %.1f°），判定为未抓住",
+                pos_drift,
+                np.degrees(rot_drift),
+                pos_tol,
+                np.degrees(rot_tol),
+            )
+            return False
+        return True
 
     # ========== Arm Selection ==========
 

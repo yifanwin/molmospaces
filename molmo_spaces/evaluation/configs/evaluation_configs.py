@@ -36,6 +36,7 @@ from molmo_spaces.configs.policy_configs import (
     BrownianMotionPolicyConfig,
     DummyPolicyConfig,
     LLMWaypointPlannerPolicyConfig,
+    grasp_settle_steps,
 )
 from molmo_spaces.configs.policy_configs_baselines import (
     CAPPolicyConfig,
@@ -220,6 +221,13 @@ class PandaOmronCuroboPickPnPEvalConfig(
             )
         self.policy_config.server_urls = []
         self.robot_config.action_noise_config.enabled = False
+        # 抓取判定必须等夹爪闭合完成才能做：判据是"夹爪位置偏离闭合位"，而闭合
+        # 过程中仍在运动的手指同样偏离闭合位，窗口太短就会把"还在合拢"误判成
+        # "已夹住物体"。原先 5 步 × 66 ms = 330 ms 短于 500 ms 的闭合时长，
+        # 97.4% 的判定通过、70.7% 随后在 LIFT 阶段掉落。步数按 policy_dt_ms 反推。
+        self.policy_config.max_grasping_timesteps = grasp_settle_steps(
+            self.policy_dt_ms, self.policy_config.gripper_close_duration
+        )
 
 
 class PandaOmronLLMWaypointPickPnPEvalConfig(PandaOmronPickAndPlaceDataGenConfig):

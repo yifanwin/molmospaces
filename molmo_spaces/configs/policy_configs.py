@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 import os
+=======
+import math
+>>>>>>> main
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -339,6 +343,10 @@ class CuroboPickAndPlacePlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     max_steps_per_waypoint: int = 10
     max_batch_plan_attempts: int = 4
     pregrasp_z_offset: float = 0.02  # [m]
+    # GRASP 阶段在 pregrasp 退距之上额外沿接近轴多进给的量 [m]。多给一点能让手指
+    # 确实包住物体，但手爪中心会越过物体中心；对薄片物体，多进给会让手掌直接压到
+    # 支撑面，MuJoCo 的接触力把关节顶住，waypoint 永远差一点到不了。
+    grasp_approach_overshoot: float = 0.01
     max_planning_reattempts: int = 5
     gripper_closed_pos: float = 0.0  # [m]
     gripper_closed_tolerance: float = 0.005  # [m]
@@ -363,6 +371,31 @@ class CuroboPickAndPlacePlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     server_urls: list[str] = [
         "jupiter-cs-aus-107.reviz.ai2.in:10002",
     ]
+
+
+def grasp_settle_steps(
+    policy_dt_ms: float,
+    gripper_close_duration: float,
+    settle_margin_s: float = 0.15,
+) -> int:
+    """按控制周期换算"夹爪闭合 + 稳定"所需的最少判定步数。
+
+    ``CuroboPlannerPolicy._grasping_something`` 靠夹爪位置偏离闭合位来判断是否夹住
+    物体。若在闭合完成前就判定，仍在运动的手指同样偏离闭合位，会被误判成"已夹住"：
+    E4 原先 5 步 × 66 ms = 330 ms 短于 500 ms 的闭合时长，97.4% 的判定都"通过"，
+    随后 70.7% 在 LIFT 阶段掉落。按闭合时长反推步数可让不同 ``policy_dt_ms`` 的
+    配置自动对齐，再加一小段稳定余量等夹爪真正停住。
+
+    Args:
+        policy_dt_ms: 策略控制周期（毫秒）。
+        gripper_close_duration: 夹爪从张开到闭合所需时间（秒）。
+        settle_margin_s: 闭合完成后的额外稳定时间（秒）。
+
+    Returns:
+        判定前需要等待的 policy 步数。
+    """
+    step_s = policy_dt_ms / 1000.0
+    return math.ceil(gripper_close_duration / step_s) + math.ceil(settle_margin_s / step_s)
 
 
 def panda_omron_planner_joint_ranges(
@@ -406,6 +439,11 @@ class PandaOmronCuroboPickAndPlacePlannerPolicyConfig(
     # The conservative hand sphere reaches 5.8 cm beyond the grip site.
     # A 2 cm approach offset puts even a valid grasp inside the target obstacle.
     pregrasp_z_offset: float = 0.10
+    # 与 RBY1 不同，PandaOmron 的 pregrasp 退距已经给足 0.10 m，GRASP 阶段只需精确
+    # 前进到抓取位姿。再额外进给会让手爪中心越过物体中心，在薄片物体（薄纸、纸巾）
+    # 与低矮物体上直接压到支撑面，实测触发 6 个接触、关节差 0.04–0.14 rad 到不了，
+    # 反复重试后 episode 失败（E4 日志 2849 次 waypoint 超时 / 449 次重试耗尽）。
+    grasp_approach_overshoot: float = 0.0
     gripper_open_command: list[float] = [0.04, -0.04]
     gripper_close_command: list[float] = [0.0, 0.0]
     velocity_constraints: dict[str, float] = {

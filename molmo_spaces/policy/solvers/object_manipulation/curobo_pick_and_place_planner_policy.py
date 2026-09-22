@@ -163,7 +163,8 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
         # Return ALL non-colliding grasps sorted by cost (not just the best one)
         grasp_poses = grasp_poses_world[noncolliding_close_grasp_ids]
 
-        # Offset pregrasp poses 2cm back along z-axis (away from object)
+        # 沿接近轴后退 pregrasp_z_offset 得到 pre-grasp 位姿。退距由各机器人的手部
+        # 碰撞球外扩量决定（PandaOmron 需要 0.10 m），不是固定的 2 cm。
         z_directions = grasp_poses[:, :3, 2]
         grasp_poses[:, :3, 3] = grasp_poses[:, :3, 3] + z_directions * -(
             self.config.policy_config.pregrasp_z_offset
@@ -628,8 +629,9 @@ class CuroboPickAndPlacePlannerPolicy(CuroboPlannerPolicy, PickAndPlacePlannerPo
 
         grasp_pose_world = tcp_pose_world.copy()
         z_direction = grasp_pose_world[:3, 2]
+        overshoot = getattr(self.config.policy_config, "grasp_approach_overshoot", 0.01)
         grasp_pose_world[:3, 3] = grasp_pose_world[:3, 3] + z_direction * (
-            self.config.policy_config.pregrasp_z_offset + 0.01
+            self.config.policy_config.pregrasp_z_offset + overshoot
         )
         self.solve_ik(grasp_pose_world)
         return self._execute_trajectory(self._gripper_action(open_gripper=True))

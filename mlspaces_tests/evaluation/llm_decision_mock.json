@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "robot": "rby1",
+  "arm": "left_arm",
+  "grasp_candidate_id": 0,
+  "approach_strategy": "lateral",
+  "lift_height": 0.35,
+  "preplace_height": 0.08,
+  "base_approach_goal": null,
+  "base_transfer_goal": null,
+  "rationale": "tracked mock fixture for offline smoke tests"
+}

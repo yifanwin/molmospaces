@@ -30,6 +30,9 @@ def summarize(run_dir: Path) -> dict:
     valid_at_3 = sum(
         any(item.get("valid") for item in records) for records in by_plan.values()
     )
+    # 决策来源：llm 走 API，geometric 用本地几何默认决策。三种对照档的 artifact
+    # 格式相同，只有这个字段不同。
+    sources = Counter(record.get("plan_source", "llm") for record in attempts)
     failures = Counter()
     for record in attempts:
         if record.get("valid"):
@@ -37,12 +40,22 @@ def summarize(run_dir: Path) -> dict:
         error = str(record.get("error", "unknown"))
         if "HTTP" in error or "transport" in error or "Malformed LLM API" in error:
             failures["api"] += 1
+        elif "PlanValidationError" in error:
+            # 领域校验失败必须排在 format 之前判断：PlanValidationError 这个类名本身
+            # 就含 "ValidationError" 子串，先判后者会把每一次 IK/碰撞失败都误分到
+            # format 桶，funnel 与跨版本对比都会失真。
+            if "IK failed" in error:
+                failures["ik"] += 1
+            elif "collision" in error.lower():
+                failures["collision"] += 1
+            elif "approach_tilt" in error:
+                failures["tilt"] += 1
+            elif "lift_height" in error or "preplace_height" in error:
+                failures["height_bound"] += 1
+            else:
+                failures["other_validation"] += 1
         elif "ValidationError" in error or "invalid JSON" in error:
             failures["format"] += 1
-        elif "IK failed" in error:
-            failures["ik"] += 1
-        elif "collision" in error.lower():
-            failures["collision"] += 1
         else:
             failures["other_validation"] += 1
     episodes = []
@@ -74,6 +87,7 @@ def summarize(run_dir: Path) -> dict:
         "plans": len(by_plan),
         "valid_plan_at_1": valid_at_1,
         "valid_plan_at_3": valid_at_3,
+        "plan_sources": dict(sources),
         "failures": failures,
         "episodes": episodes,
     }
@@ -88,14 +102,17 @@ def main() -> None:
     lines = [
         "# House 4 LLM waypoint evaluation",
         "",
-        "| Run | API attempts | Valid plans | valid@1 | valid@3 | Task success |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Run | Source | API attempts | Valid plans | valid@1 | valid@3 | Task success |",
+        "|---|---|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         successes = sum(ep["success"] for ep in row["episodes"])
         total = len(row["episodes"])
+        sources = ", ".join(
+            f"{name}={count}" for name, count in sorted(row["plan_sources"].items())
+        ) or "—"
         lines.append(
-            f"| `{row['run']}` | {row['attempts']} | {row['valid_plans']} | "
+            f"| `{row['run']}` | {sources} | {row['attempts']} | {row['valid_plans']} | "
             f"{row['valid_plan_at_1']}/{row['plans']} | "
             f"{row['valid_plan_at_3']}/{row['plans']} | {successes}/{total} |"
         )

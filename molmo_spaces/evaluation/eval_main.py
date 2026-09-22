@@ -616,11 +616,17 @@ def run_evaluation(
     else:
         config_name = eval_config_cls.__name__
 
-    if output_dir is not None:
+    run_dir_override = os.environ.get("MOLMOSPACES_RUN_DIR")
+    if run_dir_override:
+        # 断点续跑：直接使用显式指定的运行目录（不再拼 config_name/timestamp），
+        # 目录内已有的 house_N/trajectories_batch_*.h5 会被 setup_house_dirs 跳过。
+        resolved_output_dir = Path(run_dir_override)
+    elif output_dir is not None:
         resolved_output_dir = Path(output_dir) / config_name / timestamp
     else:
         resolved_output_dir = Path("eval_output") / config_name / timestamp
     os.makedirs(resolved_output_dir, exist_ok=True)
+
 
     # Determine task horizon
     assert not (task_horizon_steps is not None and task_horizon_sec is not None), (

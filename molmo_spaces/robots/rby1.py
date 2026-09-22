@@ -18,6 +18,17 @@ from molmo_spaces.controllers.torso_height import TorsoHeightJointPosController
 from molmo_spaces.kinematics.mujoco_kinematics import MlSpacesKinematics
 from molmo_spaces.robots.robot_views.rby1_view import RBY1RobotView
 
+# 夹爪位置伺服参数。MJCF 把两个夹爪 actuator 声明成 <motor>（其余 25 个都是
+# <position>），于是 XML 里残留的 biasprm（kp=4000、kv=400）因 biastype=NONE 完全
+# 失效，gainprm 也停在 <motor> 的默认值 1——ctrl 被当成力矩用。实测后果：闭合指令
+# 0.0 对应零力矩，手指纹丝不动（103:1 全场 205 步 inter_finger_dist 恒为 0.1 全开，
+# 夹爪与目标物接触恒为 False，物体原地未动）。这里按其余 <position> 关节同样的
+# kp/kv 还原成位置伺服，ctrl 即目标关节角。
+GRIPPER_KP = 4000.0
+GRIPPER_KV = 400.0
+# 与 gripper_finger_l1 的关节范围一致：-0.05 全开、0.0 闭合。
+GRIPPER_CTRL_RANGE = (-0.05, 0.0)
+
 
 class RBY1(Robot):
     """RBY1 Robot class for the RBY1 robot.
@@ -362,6 +373,31 @@ class RBY1(Robot):
         tmp_robot_config = robot_config.model_copy(deep=True)
         tmp_robot_config.robot_namespace = ""
         super().apply_control_overrides(spec, tmp_robot_config)
+        # 放在 super() 之后：K_stiffness/K_damping 按 actuator 序号前缀覆盖，夹爪是
+        # 最后两个，这里的设置必须最终生效。
+        cls._set_gripper_position_servos(spec)
+
+    @staticmethod
+    def _set_gripper_position_servos(spec: MjSpec) -> None:
+        """把两个夹爪 actuator 从力矩型改造成位置伺服（详见 GRIPPER_KP 处的说明）。
+
+        改造后 ctrl 即目标关节角，与 RBY1GripperGroup.set_gripper_ctrl_open 写入的
+        -0.05（全开）/ 0.0（闭合）语义一致。
+        """
+        for side in ("left", "right"):
+            name = f"robot_0/{side}_finger_act"
+            actuator = spec.actuator(name)
+            assert actuator is not None, f"RBY1 gripper actuator not found: {name}"
+            actuator.gainprm[:] = 0
+            actuator.gainprm[0] = GRIPPER_KP
+            actuator.biasprm[:] = 0
+            actuator.biasprm[1] = -GRIPPER_KP
+            actuator.biasprm[2] = -GRIPPER_KV
+            actuator.gaintype = mujoco.mjtGain.mjGAIN_FIXED
+            actuator.biastype = mujoco.mjtBias.mjBIAS_AFFINE
+            actuator.dyntype = mujoco.mjtDyn.mjDYN_NONE
+            actuator.ctrllimited = 1
+            actuator.ctrlrange = np.asarray(GRIPPER_CTRL_RANGE, dtype=float)
 
     @classmethod
     def add_robot_to_scene(

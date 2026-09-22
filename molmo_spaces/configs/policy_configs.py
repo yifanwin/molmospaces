@@ -206,6 +206,16 @@ class LLMWaypointPlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     llm_base_xy_limit_m: float = 2.0
     llm_collision_sample_m: float = 0.03
     llm_collision_sample_deg: float = 5.0
+    # 接触穿透容差：只有穿透超过它的新增接触才判失败。自接触与环境接触分开设，
+    # 因为两类物理意义不同——link 之间的微量互穿是建模噪声，执行期会被 MuJoCo
+    # 的接触求解器推开；撞到桌面或容器则是真干涉。
+    #   自接触：RBY1 的 link_torso_2 与 link_torso_4 建模间隙只有 15 mm，而
+    #   _preflight 的顺序差分 IK 会链式累积偏差。实测噪声 0.047 mm、边缘样本
+    #   1.66-1.84 mm，取 2 mm 放行这类。臂/端效器真撞胸是 20-28 mm，仍被拦。
+    #   环境接触：实测真干涉 4.78-12.54 mm，取 1 mm。
+    # 两者设 0 都精确回到"任何新增接触都失败"的旧行为。
+    llm_self_contact_tolerance_m: float = 0.002
+    llm_environment_contact_tolerance_m: float = 0.001
 
     # 决策来源。llm = 调 API 要高层决策；geometric = 不调 API，直接用本地几何
     # 默认决策（最近的可行候选 + 复刻 baseline 的目标高度）。两档走完全相同的

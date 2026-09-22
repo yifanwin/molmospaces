@@ -818,3 +818,103 @@ def test_get_all_phases_covers_base_segments():
     phases = LLMWaypointPlannerPolicy.get_all_phases(policy)
     assert phases["base_approach"] > phases["unknown"]
     assert phases["base_transfer"] > phases["base_approach"]
+
+
+# ---------------------------------------------------------------------------
+# 接触容差：区分网格外壳擦碰与真实碰撞
+# ---------------------------------------------------------------------------
+
+
+def _fake_contact_world(monkeypatch, contacts, self_tol=0.002, env_tol=0.001):
+    """造一个只够跑 _assert_no_new_robot_contact 的 policy 壳。
+
+    geom 5/6 属于机器人（body 1 -> root 0），geom 7/8 属于环境（body 2 -> root 1）。
+    """
+    monkeypatch.setattr(llm_module, "descendant_bodies", lambda model, root: {1})
+    policy = object.__new__(LLMWaypointPlannerPolicy)
+    policy.policy_config = SimpleNamespace(
+        llm_self_contact_tolerance_m=self_tol,
+        llm_environment_contact_tolerance_m=env_tol,
+    )
+    policy.robot_view = SimpleNamespace(
+        root_body_id=0,
+        get_move_group=lambda name: SimpleNamespace(root_body_id=1),
+    )
+    policy._selected_gripper_id = "left_gripper"
+    policy._contact_pairs = lambda: dict(contacts)
+    policy.task = SimpleNamespace(
+        env=SimpleNamespace(
+            current_model=SimpleNamespace(
+                geom_bodyid={5: 1, 6: 1, 7: 2, 8: 2},
+                body_rootid={1: 0, 2: 1},
+                geom=lambda gid: SimpleNamespace(name=f"geom_{gid}"),
+                body=lambda bid: SimpleNamespace(name=f"body_{bid}"),
+            )
+        )
+    )
+    return policy
+
+
+def test_select_new_contacts_reports_only_new_or_worsened():
+    baseline = {(1, 2): -0.0001}
+    current = {(1, 2): -0.02, (3, 4): -0.0002, (5, 6): 0.001}
+    # (1,2) 恶化、(3,4) 新增；(5,6) 是正间隙（无接触），(1,2) 若未恶化也不算。
+    assert set(llm_module.select_new_contacts(current, baseline)) == {(1, 2), (3, 4)}
+    assert llm_module.select_new_contacts({(1, 2): -0.0001}, baseline) == {}
+
+
+def test_grazing_self_contact_is_tolerated(monkeypatch):
+    """torso 内链的 0.12 mm 网格外壳互穿不该判失败。"""
+    policy = _fake_contact_world(monkeypatch, {(5, 6): -0.00012})
+    ignored, depth = policy._assert_no_new_robot_contact({}, "pregrasp", pickup_root=9)
+    assert ignored == 1
+    assert depth == pytest.approx(0.00012)
+
+
+def test_self_tolerance_is_wider_than_environment_tolerance(monkeypatch):
+    """1.84 mm：机器人自身 link 互穿放行，同一深度撞到环境物体则失败。"""
+    depth_mm = -0.00184
+    self_contact = _fake_contact_world(monkeypatch, {(5, 6): depth_mm})
+    ignored, _ = self_contact._assert_no_new_robot_contact({}, "pregrasp", pickup_root=9)
+    assert ignored == 1
+
+    env_contact = _fake_contact_world(monkeypatch, {(5, 7): depth_mm})
+    with pytest.raises(llm_module.PlanValidationError, match="robot-environment contact"):
+        env_contact._assert_no_new_robot_contact({}, "pregrasp", pickup_root=9)
+
+
+def test_deep_self_contact_still_fails(monkeypatch):
+    """臂/端效器真撞胸是 20 mm 级，必须继续拦住。"""
+    policy = _fake_contact_world(monkeypatch, {(5, 6): -0.020})
+    with pytest.raises(llm_module.PlanValidationError, match="self-contact"):
+        policy._assert_no_new_robot_contact({}, "pregrasp", pickup_root=9)
+
+
+def test_zero_tolerance_restores_old_behaviour(monkeypatch):
+    policy = _fake_contact_world(
+        monkeypatch, {(5, 6): -0.00012}, self_tol=0.0, env_tol=0.0
+    )
+    with pytest.raises(llm_module.PlanValidationError, match="penetration"):
+        policy._assert_no_new_robot_contact({}, "pregrasp", pickup_root=9)
+
+
+def test_baseline_contact_worsening_is_caught(monkeypatch):
+    """基线里已有 0.1 mm 擦碰、后来恶化成 20 mm：旧的集合差会放过，现在必须报。"""
+    policy = _fake_contact_world(monkeypatch, {(5, 6): -0.020})
+    with pytest.raises(llm_module.PlanValidationError, match="penetration 20.00 mm"):
+        policy._assert_no_new_robot_contact(
+            {(5, 6): -0.0001}, "lift", pickup_root=9
+        )
+
+
+def test_environment_contact_is_labelled_separately(monkeypatch):
+    policy = _fake_contact_world(monkeypatch, {(5, 7): -0.02})
+    with pytest.raises(llm_module.PlanValidationError, match="robot-environment contact"):
+        policy._assert_no_new_robot_contact({}, "lift", pickup_root=9)
+
+
+def test_collision_substring_survives_in_error_message(monkeypatch):
+    """summarize_llm_waypoint_eval.py 按 'collision' 子串分桶，措辞不能改掉它。"""
+    policy = _fake_contact_world(monkeypatch, {(5, 6): -0.02})
+    with pytest.raises(llm_module.PlanValidationError, match="new MuJoCo collision"):
+        policy._assert_no_new_robot_contact({}, "grasp", pickup_root=9)

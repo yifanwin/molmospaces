@@ -236,6 +236,25 @@ def recommend_base_goal(
     return [float(position[0]), float(position[1]), float(yaw)]
 
 
+def select_new_contacts(
+    current: dict[tuple[int, int], float],
+    baseline: dict[tuple[int, int], float],
+) -> dict[tuple[int, int], float]:
+    """挑出相对 baseline 新增或恶化的接触对，值为 signed distance（负 = 穿透）。
+
+    原实现用集合差 `current - baseline`，语义是"出现过就永久豁免"：某一对在基线
+    里已有 0.1 mm 擦碰、之后恶化成 20 mm 的真碰撞也会被放过。这里改成按距离比较；
+    不在 baseline 里的接触对以 0 为基准，于是等价于原来的"新增接触"。
+
+    是否构成失败由调用方按穿透深度与容差判定——RBY1 的 link_torso_2 与
+    link_torso_4 建模间隙只有 15 mm，实测失败构型的穿透仅 0.02-0.24 mm（网格
+    外壳擦碰），而真实碰撞（臂或端效器撞胸）深度 >= 5 mm，两者需要区分。
+    """
+    return {
+        pair: depth for pair, depth in current.items() if depth < baseline.get(pair, 0.0)
+    }
+
+
 def _ee_segment(
     phase: Phase, position: np.ndarray, rotation: np.ndarray, speed: float
 ) -> PlanSegment:
@@ -567,7 +586,12 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
 
     已知的、本设计不解决的缺陷：
       1. mujoco_kinematics.ik 是纯阻尼最小二乘，无碰撞、无零空间正则，解完全由
-         种子决定；更小的 pregrasp standoff 只是缓解。
+         种子决定：_preflight 拿上一步的解作下一步种子，偏差会链式累积。实测
+         RBY1 的 torso 内链（link_torso_2 / link_torso_4）建模间隙只有 15 mm，
+         累积偏差会让 link 之间出现亚毫米级的网格外壳互穿——这不是物理碰撞，
+         已由 llm_self_contact_tolerance_m 放行。真正的干涉（臂或端效器撞胸
+         20-28 mm、手指撞桌或容器 4.8-12.5 mm）仍会被拦下，那来自直线插值路径
+         没有避障，需要路径规划而不是放宽判据。
       2. _assert_no_new_robot_contact 只检查机器人参与的接触对，被搬运物体与
          桌/容器的新接触不会被拦下。
       3. reachable_arms 是在当前底盘位姿下标注的，模型移动底盘后该标注可能过期。
@@ -593,6 +617,9 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         self._selected_gripper_id: str | None = None
         self._selected_arm_id: str | None = None
         self._artifact_id = f"{os.getpid()}_{time.time_ns()}"
+        # 最近一次预检被容差放行的擦碰，成功与失败路径都要能取到。
+        self._ignored_graze_count = 0
+        self._max_ignored_penetration = 0.0
 
     def get_all_phases(self) -> dict[str, int]:
         # 基类没有两个 base phase，缺了会让 PolicyPhaseSensor 落到 -1 并刷 warning。
@@ -1122,6 +1149,9 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
             # _get_ik_unlocked_move_group_ids()，让本次预检解锁错的关节组。
             self._selected_arm_id = None
             self._selected_gripper_id = None
+            # 与选臂一起重置：否则上一次尝试的擦碰统计会被当成这一次的。
+            self._ignored_graze_count = 0
+            self._max_ignored_penetration = 0.0
             record: dict[str, Any] = {
                 "plan_id": self._artifact_id,
                 "attempt": attempt,
@@ -1180,7 +1210,11 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                     speed_fast=self.policy_config.speed_fast,
                     speed_slow=self.policy_config.speed_slow,
                 )
-                self._preflight_kinematics_and_contacts(plan, pickup_obj)
+                # 被容差放行的擦碰也落盘：调 llm_self_contact_tolerance_m 时这是
+                # 唯一可比的数字，也是判断有没有误放过真碰撞的依据。
+                record["contact_stats"] = (
+                    self._preflight_kinematics_and_contacts(plan, pickup_obj) or {}
+                )
                 record["parsed_plan"] = plan.model_dump(mode="json")
                 record["valid"] = True
                 self._write_artifact(attempt, record)
@@ -1193,7 +1227,12 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                 previous_error = f"{type(exc).__name__}: {exc}"
                 error_history.append(previous_error)
                 feedback = self._feedback_from_error(exc)
-                record.update(valid=False, error=previous_error, validation_feedback=feedback)
+                record.update(
+                    valid=False,
+                    error=previous_error,
+                    validation_feedback=feedback,
+                    contact_stats=self._contact_stats(),
+                )
                 self._write_artifact(attempt, record)
                 log.warning("%s decision attempt %d rejected: %s", source, attempt, previous_error)
         raise ValueError(f"LLM planning failed after {max_attempts} calls: {previous_error}")
@@ -1284,21 +1323,33 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                 )
         return geometry
 
-    def _contact_pairs(self) -> set[tuple[int, int]]:
+    def _contact_pairs(self) -> dict[tuple[int, int], float]:
+        """当前 MuJoCo 接触对及其 signed distance（负值表示穿透，越负越深）。
+
+        同一对 geom 可能被多点接触记录多次，取最深的那条。
+        """
         data = self.task.env.current_data
-        pairs = set()
+        pairs: dict[tuple[int, int], float] = {}
         for idx in range(data.ncon):
             contact = data.contact[idx]
             geoms = sorted((int(contact.geom1), int(contact.geom2)))
-            pairs.add((geoms[0], geoms[1]))
+            key = (geoms[0], geoms[1])
+            depth = float(contact.dist)
+            if key not in pairs or depth < pairs[key]:
+                pairs[key] = depth
         return pairs
 
     def _assert_no_new_robot_contact(
         self,
-        baseline: set[tuple[int, int]],
+        baseline: dict[tuple[int, int], float],
         phase: str,
         pickup_root: int,
-    ) -> None:
+    ) -> tuple[int, float]:
+        """检查当前状态里是否出现了会判失败的机器人接触。
+
+        返回 (被容差放行的擦碰次数, 其中最深的穿透深度 m)，供 artifact 记录：
+        调容差时这是唯一可比的数字，也是判断有没有误放过真碰撞的依据。
+        """
         robot_root = self.robot_view.root_body_id
         model = self.task.env.current_model
         gripper_root = self.robot_view.get_move_group(
@@ -1306,7 +1357,9 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         ).root_body_id
         gripper_body_ids = descendant_bodies(model, gripper_root)
         holding_phases = {"grasp", "lift", "base_transfer", "preplace", "place"}
-        for geom_pair in self._contact_pairs() - baseline:
+        ignored_count = 0
+        ignored_depth = 0.0
+        for geom_pair, depth in select_new_contacts(self._contact_pairs(), baseline).items():
             body_ids = tuple(int(model.geom_bodyid[geom_id]) for geom_id in geom_pair)
             roots = tuple(
                 int(model.body_rootid[body_id]) for body_id in body_ids
@@ -1325,6 +1378,19 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                 )
                 if robot_body_id in gripper_body_ids:
                     continue
+            # 到这里是本次新增（或相对基线恶化）、且不豁免的机器人接触。
+            # 自接触与环境接触用不同容差：link 之间的微量互穿是建模噪声，执行期
+            # 会被 MuJoCo 的接触求解器推开；撞到桌面或容器则是真干涉。
+            is_self_contact = len(set(roots)) == 1
+            tolerance = (
+                self.policy_config.llm_self_contact_tolerance_m
+                if is_self_contact
+                else self.policy_config.llm_environment_contact_tolerance_m
+            )
+            if -depth <= tolerance:
+                ignored_count += 1
+                ignored_depth = max(ignored_depth, -depth)
+                continue
             names = tuple(model.geom(geom_id).name or f"geom_{geom_id}" for geom_id in geom_pair)
             # 同时报出 body 名：机器人 MJCF 里的 geom 多为无名，只有 geom id
             # 无法判断撞到的是夹爪、小臂还是 torso。
@@ -1332,16 +1398,25 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                 model.body(int(model.geom_bodyid[geom_id])).name or f"body_{int(model.geom_bodyid[geom_id])}"
                 for geom_id in geom_pair
             )
+            # 保留 "collision" 子串：summarize_llm_waypoint_eval.py 按子串分桶，
+            # 改了措辞会让失败全落进 other_validation。
+            contact_kind = "self-contact" if is_self_contact else "robot-environment contact"
             raise PlanValidationError(
-                f"{phase}: new MuJoCo collision between geoms {names} (bodies {bodies})"
+                f"{phase}: new MuJoCo collision between geoms {names} (bodies {bodies}); "
+                f"{contact_kind}, penetration {abs(depth) * 1000:.2f} mm "
+                f"(tolerance {tolerance * 1000:.2f} mm)"
             )
+        return ignored_count, ignored_depth
 
     def _preflight_kinematics_and_contacts(
         self, plan: LLMWaypointPlan, pickup_obj: MlSpacesObject
-    ) -> None:
+    ) -> dict[str, Any]:
+        """逐采样点做 IK 与接触预检，返回被容差放行的擦碰统计供 artifact 记录。"""
         model, data = self.task.env.current_model, self.task.env.current_data
         snapshot = {name: value.copy() for name, value in self.robot_view.get_qpos_dict().items()}
         baseline = self._contact_pairs()
+        ignored_graze_count = 0
+        max_ignored_penetration = 0.0
         qstate = {name: value.copy() for name, value in snapshot.items()}
         current_pose = self.robot_view.get_move_group(
             self._selected_gripper_id
@@ -1363,7 +1438,11 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                         qstate["base"] = q0 + (q1 - q0) * alpha
                         self.robot_view.set_qpos_dict(qstate)
                         mujoco.mj_forward(model, data)
-                        self._assert_no_new_robot_contact(baseline, segment.phase, pickup_root)
+                        graze_count, graze_depth = self._assert_no_new_robot_contact(
+                            baseline, segment.phase, pickup_root
+                        )
+                        ignored_graze_count += graze_count
+                        max_ignored_penetration = max(max_ignored_penetration, graze_depth)
                     new_base_pose = self.robot_view.base.pose.copy()
                     current_pose = new_base_pose @ np.linalg.inv(old_base_pose) @ current_pose
                     continue
@@ -1405,11 +1484,27 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                         }
                         self.robot_view.set_qpos_dict(qstate)
                         mujoco.mj_forward(model, data)
-                        self._assert_no_new_robot_contact(baseline, segment.phase, pickup_root)
+                        graze_count, graze_depth = self._assert_no_new_robot_contact(
+                            baseline, segment.phase, pickup_root
+                        )
+                        ignored_graze_count += graze_count
+                        max_ignored_penetration = max(max_ignored_penetration, graze_depth)
                     current_pose = goal
         finally:
             self.robot_view.set_qpos_dict(snapshot)
             mujoco.mj_forward(model, data)
+            # 写实例变量而非只靠返回值：预检抛异常时也要能拿到已放行的擦碰，
+            # 否则调容差时只看得见成功那一次的数字。
+            self._ignored_graze_count = ignored_graze_count
+            self._max_ignored_penetration = max_ignored_penetration
+        return self._contact_stats()
+
+    def _contact_stats(self) -> dict[str, Any]:
+        """最近一次预检里被容差放行的擦碰统计。"""
+        return {
+            "ignored_graze_count": self._ignored_graze_count,
+            "max_ignored_penetration_mm": round(self._max_ignored_penetration * 1000, 3),
+        }
 
     def _tcp_sequence(
         self,

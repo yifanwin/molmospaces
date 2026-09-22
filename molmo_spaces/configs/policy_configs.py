@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-<<<<<<< HEAD
 import os
-=======
 import math
->>>>>>> main
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np

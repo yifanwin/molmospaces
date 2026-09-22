@@ -20,5 +20,5 @@ case "$MODE" in
   validate) "$PYTHON_BIN" -m molmo_spaces.evaluation.last_mile.validate --output "$OUTPUT" "$@" ;;
   test) "$PYTHON_BIN" -m pytest "$REPO/mlspaces_tests/evaluation/test_last_mile_p0.py" -q "$@" ;;
   all) bash "$0" build; bash "$0" test; bash "$0" validate "$@" ;;
-  *) echo '用法：run_last_mile_p0.sh {build|validate|test|all}' >&2; exit 2 ;;
+  *) echo '用法：run_last_mile_p0.sh {build|validate|test|all}；正式集验证加 --subset formal' >&2; exit 2 ;;
 esac

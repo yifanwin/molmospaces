@@ -174,15 +174,20 @@ def main():
     parser.add_argument("--p0-root", type=Path, required=True)
     parser.add_argument("--p1-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--subset", choices=("pilot", "formal"), default="pilot")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="默认处理所选子集的全部 episode；无有效 A 的条目记为 skipped")
     parser.add_argument("--timeout-sec", type=float, default=300.0)
     parser.add_argument("--repeat-evaluations", type=int, default=2)
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[3]
     args.output.mkdir(parents=True, exist_ok=True)
     inputs = {
-        "schema_version": 1, "protocol": PROTOCOL,
+        "schema_version": 1, "protocol": dict(PROTOCOL, subset=args.subset),
+        "subset": args.subset,
         "p0_manifest_sha256": digest(args.p0_root / "manifest.jsonl"),
+        "p0_subset_manifest_sha256": digest(args.p0_root / args.subset / "manifest.jsonl"),
+        "p0_subset_benchmark_sha256": digest(args.p0_root / args.subset / "benchmark.json"),
         "p1_inputs_sha256": digest(args.p1_root / "inputs.json"),
         "p1_complete_sha256": digest(args.p1_root / "COMPLETE.json"),
         "implementation_sha256": implementation_hashes(repo),
@@ -192,28 +197,33 @@ def main():
     if inputs_path.exists() and json.loads(inputs_path.read_text()) != inputs:
         raise ValueError("P2 输入或实现已改变；请保留旧目录并使用新的运行目录")
     atomic_json(inputs_path, inputs)
-    episodes = json.loads((args.p0_root / "pilot/benchmark.json").read_text())
+    episodes = json.loads((args.p0_root / args.subset / "benchmark.json").read_text())
     rows = [json.loads(line) for line in
-            (args.p0_root / "pilot/manifest.jsonl").read_text().splitlines()]
+            (args.p0_root / args.subset / "manifest.jsonl").read_text().splitlines()]
     p1_results = [json.loads(line) for line in
                   (args.p1_root / "episodes.jsonl").read_text().splitlines()]
+    expected_count = len(rows)
+    limit = expected_count if args.limit is None else min(args.limit, expected_count)
+    if len(p1_results) != expected_count:
+        raise ValueError(f"P1 结果数量 {len(p1_results)} 与 {args.subset} 子集 {expected_count} 不一致")
     results = [
         run_episode(index, episode, row, p1_result, args.p1_root, args.output,
                     args.timeout_sec, args.repeat_evaluations)
         for index, (episode, row, p1_result) in enumerate(zip(episodes, rows, p1_results))
-        if index < args.limit
+        if index < limit
     ]
     jsonl(args.output / "episodes.jsonl", results)
     valid_a = [result for result in results if result["p1_status"] == "completed"]
     evaluated = [result for result in valid_a if result["status"] in {"feasible", "not_found", "unknown"}]
     summary = {
-        "experiment": PROTOCOL["name"], "attempted": len(results),
+        "experiment": PROTOCOL["name"], "subset": args.subset,
+        "expected": expected_count, "attempted": len(results),
         "valid_A": len(valid_a), "evaluated_A": len(evaluated),
         "status_counts": {status: sum(r["status"] == status for r in evaluated)
                           for status in ("feasible", "not_found", "unknown")},
         "repeatable": bool(evaluated) and all(r.get("repeatable") for r in evaluated),
         "unit_acceptance_tests": "run_separately",
-        "complete": len(results) == 10 and len(evaluated) == len(valid_a),
+        "complete": len(results) == expected_count and len(evaluated) == len(valid_a),
     }
     atomic_json(args.output / "summary.json", summary)
     if summary["complete"]:

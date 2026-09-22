@@ -1,4 +1,4 @@
-"""Run P1: deterministic real A* navigation on the frozen ten-episode pilot."""
+"""Run P1: deterministic real A* navigation on a frozen P0 subset."""
 
 import argparse
 from copy import deepcopy
@@ -96,13 +96,19 @@ def implementation_hashes(repo: Path) -> dict[str, str]:
     return {str(path.relative_to(repo)): digest(path) for path in sorted(paths) if path.exists()}
 
 
-def build_inputs(p0_root: Path, repo: Path) -> dict:
+def build_inputs(p0_root: Path, repo: Path, subset: str) -> dict:
     p0_provenance = json.loads((p0_root / "provenance.json").read_text())
     p0_config = json.loads((p0_root / "config.json").read_text())
     data_audit = audit(p0_root)
     return {
         "schema_version": 1,
-        "protocol": PROTOCOL,
+        "protocol": dict(
+            PROTOCOL,
+            subset=subset,
+            episode_count=data_audit[f"{subset}_count"],
+            formal_simulation="scheduled" if subset == "formal" else "not_run",
+        ),
+        "subset": subset,
         "p0_audit": data_audit,
         "p0_source_sha256": p0_config["source_sha256"],
         "p0_manifest_sha256": digest(p0_root / "manifest.jsonl"),
@@ -294,36 +300,42 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--p0-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--limit", type=int, default=10, help="仅调试；少于 10 不生成完成标记")
+    parser.add_argument("--subset", choices=("pilot", "formal"), default="pilot")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="仅调试；默认运行所选子集的全部 episode")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[3]
     args.output.mkdir(parents=True, exist_ok=True)
-    inputs = build_inputs(args.p0_root, repo)
+    inputs = build_inputs(args.p0_root, repo, args.subset)
     inputs_path = args.output / "inputs.json"
     if inputs_path.exists() and json.loads(inputs_path.read_text()) != inputs:
         raise ValueError("P1 输入或实现已改变；请保留旧目录并使用新的运行目录")
     atomic_json(inputs_path, inputs)
 
-    episodes = json.loads((args.p0_root / "pilot/benchmark.json").read_text())
+    episodes = json.loads((args.p0_root / args.subset / "benchmark.json").read_text())
     rows = [json.loads(line) for line in
-            (args.p0_root / "pilot/manifest.jsonl").read_text().splitlines()]
+            (args.p0_root / args.subset / "manifest.jsonl").read_text().splitlines()]
+    expected_count = len(rows)
+    limit = expected_count if args.limit is None else min(args.limit, expected_count)
     results = [run_episode(i, episode, row, inputs, args.output)
-               for i, (episode, row) in enumerate(zip(episodes, rows)) if i < args.limit]
+               for i, (episode, row) in enumerate(zip(episodes, rows)) if i < limit]
     jsonl(args.output / "episodes.jsonl", results)
     counts = {status: sum(r["status"] == status for r in results)
               for status in sorted(TERMINAL_STATUSES)}
     valid = counts["completed"]
-    complete = len(results) == 10 and all(r["status"] in TERMINAL_STATUSES for r in results)
+    complete = len(results) == expected_count and all(r["status"] in TERMINAL_STATUSES for r in results)
     summary = {
         "experiment": PROTOCOL["name"],
+        "subset": args.subset,
+        "expected": expected_count,
         "attempted": len(results),
         "classified": len(results),
         "valid_A": valid,
         "status_counts": counts,
         "complete": complete,
-        "p2_gate": "open" if complete and valid >= 5 else "closed",
+        "p2_gate": "open" if complete and (args.subset == "formal" or valid >= 5) else "closed",
         "p2_started": False,
-        "formal_simulation": "not_run",
+        "formal_simulation": "completed" if args.subset == "formal" and complete else "not_run",
     }
     atomic_json(args.output / "summary.json", summary)
     if complete:

@@ -163,8 +163,11 @@ def verify(task, provenance, path, mode="minimal"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--subset', choices=['pilot', 'formal'], default='pilot',
+                        help='要验证的冻结子集；formal 为 100 条正式场景')
     parser.add_argument('--mode', choices=['minimal', 'full'], default='minimal', help='默认 Minimal P0；完整旧验收仅按需运行')
-    parser.add_argument('--limit', type=int, default=10, help='工程调试上限；少于 10 不判定 P0 完成')
+    parser.add_argument('--limit', type=int, default=None,
+                        help='工程调试上限；默认运行所选子集的全部 episode')
     args = parser.parse_args()
     root = args.output
     data_audit = audit(root)
@@ -172,14 +175,22 @@ def main():
     config = json.loads((root / 'config.json').read_text())
     origin = json.loads((root / 'provenance.json').read_text())
     assert digest(origin['source']) == config['source_sha256']
-    episodes = json.loads((root / 'pilot/benchmark.json').read_text())
-    rows = [json.loads(line) for line in (root / 'pilot/manifest.jsonl').read_text().splitlines()]
+    subset = args.subset
+    episodes = json.loads((root / subset / 'benchmark.json').read_text())
+    rows = [json.loads(line) for line in (root / subset / 'manifest.jsonl').read_text().splitlines()]
+    expected_count = len(rows)
+    limit = expected_count if args.limit is None else min(args.limit, expected_count)
     from molmo_spaces.molmo_spaces_constants import DATA_TYPE_TO_SOURCE_TO_VERSION
     protocol = dict(name=args.mode, restore_repeats=1 if args.mode == 'minimal' else 10, control_steps=0 if args.mode == 'minimal' else 20, repair_robot_base_pose_if_colliding=False)
-    common = dict(validation_protocol=protocol, asset_versions=DATA_TYPE_TO_SOURCE_TO_VERSION, mujoco_version=mujoco.__version__, asset_metadata_sha256=origin['annotation_sha256'], scene_metadata_sha256=origin['scene_metadata_sha256'], source_sha256=config['source_sha256'], config_sha256=digest(root / 'config.json'),
-                  manifest_sha256=digest(root / 'manifest.jsonl'), pilot_sha256=digest(root / 'pilot/benchmark.json'),
+    common = dict(subset=subset, expected_count=expected_count,
+                  validation_protocol=protocol, asset_versions=DATA_TYPE_TO_SOURCE_TO_VERSION, mujoco_version=mujoco.__version__, asset_metadata_sha256=origin['annotation_sha256'], scene_metadata_sha256=origin['scene_metadata_sha256'], source_sha256=config['source_sha256'], config_sha256=digest(root / 'config.json'),
+                  manifest_sha256=digest(root / 'manifest.jsonl'),
+                  subset_manifest_sha256=digest(root / subset / 'manifest.jsonl'),
+                  subset_benchmark_sha256=digest(root / subset / 'benchmark.json'),
                   implementation_sha256={str(p.relative_to(Path(__file__).parents[3])): digest(p) for p in [*Path(__file__).parent.glob('*.py'), Path(__file__).parents[2] / 'configs/policy_configs.py', Path(__file__).parents[3] / 'scripts/evaluation/run_last_mile_p0.sh']})
-    result_dir = root / f'validation_{args.mode}'
+    # 保留历史 pilot 目录命名；formal 永远写入独立目录，不能混入已完成的 10 条结果。
+    result_dir = root / (f'validation_{args.mode}' if subset == 'pilot'
+                         else f'validation_{subset}_{args.mode}')
     result_dir.mkdir(parents=True, exist_ok=True)
     run_path = result_dir / 'inputs.json'
     if run_path.exists() and json.loads(run_path.read_text()) != common:
@@ -187,7 +198,7 @@ def main():
     atomic_json(run_path, common)
     results = []
     for index, (episode, row) in enumerate(zip(episodes, rows)):
-        if index >= args.limit:
+        if index >= limit:
             break
         result_path = result_dir / f'{index:03d}.json'
         if result_path.exists():
@@ -234,9 +245,14 @@ def main():
             gc.collect()
     jsonl(result_dir / 'episodes.jsonl', results)
     assert digest(origin['source']) == config['source_sha256']
-    summary = dict(protocol=args.mode, attempted=len(results), passed=sum(r['status'] == 'passed' for r in results),
-                   complete=len(results) == 10 and all(r['status'] == 'passed' for r in results),
-                   failures=[r for r in results if r['status'] != 'passed'], formal_simulation='not_run')
+    summary = dict(subset=subset, protocol=args.mode, expected=expected_count,
+                   attempted=len(results), passed=sum(r['status'] == 'passed' for r in results),
+                   complete=len(results) == expected_count and all(r['status'] == 'passed' for r in results),
+                   failures=[r for r in results if r['status'] != 'passed'],
+                   formal_simulation=('passed' if subset == 'formal' and len(results) == expected_count
+                                      and all(r['status'] == 'passed' for r in results)
+                                      else 'attempted_all' if subset == 'formal' and len(results) == expected_count
+                                      else 'not_run'))
     atomic_json(result_dir / 'summary.json', summary)
     if summary['complete']:
         atomic_json(result_dir / 'COMPLETE.json', {'inputs_sha256': digest(run_path), 'episodes_sha256': digest(result_dir / 'episodes.jsonl')})

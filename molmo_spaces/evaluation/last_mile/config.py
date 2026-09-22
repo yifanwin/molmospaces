@@ -4,6 +4,7 @@ from pydantic import Field
 from molmo_spaces.configs.abstract_exp_config import MlSpacesExpConfig
 from molmo_spaces.configs.robot_configs import RBY1MConfig
 from molmo_spaces.configs.policy_configs import DummyPolicyConfig
+from molmo_spaces.configs.policy_configs import AStarNavToObjPolicyConfig
 from molmo_spaces.configs.task_configs import PickAndPlaceTaskConfig
 from molmo_spaces.configs.task_sampler_configs import BaseMujocoTaskSamplerConfig
 
@@ -31,3 +32,25 @@ class P0Config(MlSpacesExpConfig):
     @property
     def tag(self):
         return 'last_mile_p0'
+
+
+class P1TaskSamplerConfig(BaseMujocoTaskSamplerConfig):
+    """JSON evaluation still owns scene creation; this field configures A* clearance."""
+
+    robot_safety_radius: float = 0.30
+
+
+class P1Config(P0Config):
+    """P1 keeps the P0 simulation cadence and swaps in the audited A* navigator."""
+
+    task_horizon: int = 600
+    policy_config: AStarNavToObjPolicyConfig = Field(default_factory=AStarNavToObjPolicyConfig)
+    task_sampler_config: P1TaskSamplerConfig = Field(
+        default_factory=lambda: P1TaskSamplerConfig(
+            house_inds=[0], samples_per_house=1, task_batch_size=1, max_tasks=1
+        )
+    )
+
+    @property
+    def tag(self):
+        return 'last_mile_p1'

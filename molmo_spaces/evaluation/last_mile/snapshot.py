@@ -273,6 +273,10 @@ def override_base_pose(task, pose):
     """显式底盘变换，不重置其他控制器、不执行稳定步。"""
     robot = task.env.current_robot
     robot.robot_view.base.pose = np.asarray(pose).copy()
+    # Holo base ``noop_ctrl`` is read from a site pose.  Refresh kinematics before
+    # asking the controller to hold the teleported pose, otherwise it targets the
+    # stale pre-teleport site and drives back there on the first real step.
+    mujoco.mj_forward(task.env.current_model, task.env.current_data)
     controller = robot.controllers['base']
     controller.set_to_stationary()
     controller.robot_move_group.ctrl = controller.compute_ctrl_inputs()

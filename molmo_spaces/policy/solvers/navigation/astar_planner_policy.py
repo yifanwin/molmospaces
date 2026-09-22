@@ -72,6 +72,8 @@ class AStarPlannerPolicy(PlannerPolicy):
         self._candidate_objs = None
         self._skipped_candidates = set()
         self._replan_after = None
+        self._termination_reason = None
+        self._termination_detail = None
 
         self.robot_view = task.env.current_robot.robot_view
 
@@ -89,7 +91,44 @@ class AStarPlannerPolicy(PlannerPolicy):
         self._candidate_objs = None
         self._skipped_candidates = set()
         self._replan_after = None
+        self._termination_reason = None
+        self._termination_detail = None
         self.nav_planner.blacklist.clear()
+
+    @property
+    def termination_reason(self) -> str | None:
+        """Structured navigation outcome without changing the action interface."""
+        return self._termination_reason
+
+    @property
+    def termination_detail(self) -> str | None:
+        return self._termination_detail
+
+    @property
+    def planned_goal_pose(self):
+        """The sampled navigation goal as ``(position, quaternion)``, if available."""
+        return self._target_pos_quat
+
+    @property
+    def planned_endpoint(self):
+        """Final SE(2) waypoint after path truncation and interpolation."""
+        if self._nav_plan is None or len(self._nav_plan) == 0:
+            return None
+        return self._nav_plan[-1].copy()
+
+    def get_info(self) -> dict:
+        return {
+            "termination_reason": self.termination_reason,
+            "termination_detail": self.termination_detail,
+            "planned_goal_pose": None
+            if self.planned_goal_pose is None
+            else [np.asarray(x).tolist() for x in self.planned_goal_pose],
+            "planned_endpoint": None
+            if self.planned_endpoint is None
+            else self.planned_endpoint.tolist(),
+            "reached_waypoints": self._reached_waypoints,
+            "retry_count": self.retry_count,
+        }
 
     @property
     def retry_count(self) -> int:
@@ -318,6 +357,7 @@ class AStarPlannerPolicy(PlannerPolicy):
                 for pose_attempt in range(5):
                     total_attempts += 1
                     if self.target_pos_quat is None:
+                        self._termination_detail = "goal_sampling_failed"
                         log.info(
                             "[A* PLAN ATTEMPT FAIL] target_pos_quat is None - NavGoalSampler failed to find valid goal position"
                         )
@@ -331,9 +371,16 @@ class AStarPlannerPolicy(PlannerPolicy):
                         except ValueError as e:
                             if "starting position" in str(e):
                                 self._nav_plan = None
+                                self._termination_detail = "non_plannable_start"
                                 return self._nav_plan
+                            if "target position" in str(e):
+                                self._nav_plan = None
+                                self._termination_detail = "non_plannable_goal"
+                                return self._nav_plan
+                            raise
 
                         if world_waypoints is None:
+                            self._termination_detail = "astar_no_path"
                             robot_pos = self.robot_view.base.pose[:3, 3]
                             target_pos = self.target_pos_quat[0]
                             log.info(
@@ -366,6 +413,9 @@ class AStarPlannerPolicy(PlannerPolicy):
                 else:
                     break
             else:
+                self._termination_reason = "no_path"
+                if self._termination_detail is None:
+                    self._termination_detail = "all_candidates_exhausted"
                 log.warning("[A* PLAN FAIL] no valid trajectory found")
 
         return self._nav_plan
@@ -401,6 +451,8 @@ class AStarPlannerPolicy(PlannerPolicy):
                         self._nav_plan = None
                         self._target_pos_quat = None
                         if self.nav_plan is None:
+                            self._termination_reason = "no_path"
+                            self._termination_detail = "replan_failed"
                             log.warning("Terminating due to failure to replan.")
                             return None
                     else:
@@ -448,12 +500,16 @@ class AStarPlannerPolicy(PlannerPolicy):
                             f"Terminating due to failure to return to previous waypoint"
                             f" with {self._replan_after} missing return waypoints"
                         )
+                        self._termination_reason = "no_path"
+                        self._termination_detail = "failed_to_return_for_replan"
                         return None
                 else:
                     log.warning(
                         f"Terminating due to failure to progress with distance {cur_distance:.3f} to waypoint"
                         f" and no plan retries left."
                     )
+                    self._termination_reason = "no_path"
+                    self._termination_detail = "progress_stalled"
                     return None
 
             else:
@@ -466,6 +522,9 @@ class AStarPlannerPolicy(PlannerPolicy):
 
     def get_action(self, observation):
         if self.nav_plan is None:
+            self._termination_reason = "no_path"
+            if self._termination_detail is None:
+                self._termination_detail = "plan_unavailable"
             # No plan possible, finish task immediately
             log.warning(
                 f"[A* DONE] Planning failed - terminating episode at step {self.task.num_steps_taken()}"
@@ -478,6 +537,9 @@ class AStarPlannerPolicy(PlannerPolicy):
         waypoint = self.current_waypoint()
 
         if waypoint is None:
+            if self._termination_reason is None:
+                self._termination_reason = "completed"
+                self._termination_detail = "all_waypoints_reached"
             # All waypoints reached - navigation complete
             log.info(
                 f"[A* DONE] Navigation complete - reached {self._reached_waypoints} waypoints"

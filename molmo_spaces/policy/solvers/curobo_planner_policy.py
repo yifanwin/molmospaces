@@ -230,6 +230,61 @@ class CuroboPlannerPolicy(PlannerPolicy):
         joint_diff = np.abs(np.array(current_joint_pos) - np.array(waypoint))
         return bool(np.all(joint_diff < tolerance))
 
+    def _describe_waypoint_error(self, waypoint: list[float], top_n: int = 4) -> str:
+        """列出与目标 waypoint 误差最大的几个关节，便于定位卡在哪一组上。
+
+        只用 move group 名加组内序号标注（如 ``arm[3]``），因为基座关节存的是世界
+        坐标而各机器人的组内关节名并不统一；超时诊断只需要指出是哪一组。
+        """
+        current = np.array(self._get_current_joint_positions())
+        target = np.array(waypoint)
+        if current.shape != target.shape:
+            return f"关节向量长度不一致: current={current.shape}, waypoint={target.shape}"
+        joint_diff = np.abs(current - target)
+        labels = [
+            f"{group}[{i - start}]"
+            for group, (start, end) in self.planner_joint_ranges.items()
+            for i in range(start, end)
+        ]
+        order = np.argsort(joint_diff)[::-1][:top_n]
+        return ", ".join(f"{labels[i]}={joint_diff[i]:.4f}" for i in order)
+
+    def _describe_stall(self) -> str:
+        """超时诊断：区分"被物体挡住"与"伺服跟不上"。
+
+        外部接触非空说明机器人在物理上抵住了场景物体；各组最大关节速度接近零
+        说明已经停住（要么到位要么被挡），仍有明显速度则只是在缓慢逼近。
+        """
+        data = self.task.env.current_data
+        model = data.model
+        robot_namespace = self.config.robot_config.robot_namespace
+        contacts: dict[str, int] = {}
+        for contact in data.contact:
+            root1 = model.body_rootid[model.geom_bodyid[contact.geom1]]
+            root2 = model.body_rootid[model.geom_bodyid[contact.geom2]]
+            name1 = model.body(root1).name
+            name2 = model.body(root2).name
+            robot_in_1 = name1.startswith(robot_namespace)
+            robot_in_2 = name2.startswith(robot_namespace)
+            if robot_in_1 == robot_in_2:
+                continue
+            robot_geom = contact.geom1 if robot_in_1 else contact.geom2
+            other_body = name2 if robot_in_1 else name1
+            robot_body = name1 if robot_in_1 else name2
+            robot_geom_name = model.geom(robot_geom).name or robot_body
+            key = f"{robot_geom_name} ↔ {other_body}"
+            contacts[key] = contacts.get(key, 0) + 1
+        view = self.task.env.current_robot.robot_view
+        speeds = ", ".join(
+            f"{group}={float(np.abs(view.get_move_group(group).joint_vel).max()):.4f}"
+            for group in self.planner_joint_ranges
+        )
+        contact_summary = (
+            "; ".join(f"{k}×{v}" for k, v in sorted(contacts.items(), key=lambda kv: -kv[1])[:3])
+            or "无"
+        )
+        return f"外部接触({len(contacts)} 对): {contact_summary}; 各组最大关节速度: {speeds}"
+
     # ========== Trajectory Execution ==========
 
     def _execute_trajectory(self, gripper_command: dict[str, float]) -> dict[str, Any]:
@@ -290,8 +345,12 @@ class CuroboPlannerPolicy(PlannerPolicy):
             max_steps = getattr(self.config.policy_config, "max_steps_per_waypoint", 100)
             if self.steps_spent_in_waypoint >= max_steps:
                 log.warning(
-                    f"[TIMEOUT] Timed out on reaching waypoint {self.trajectory_index} after "
-                    f"{self.steps_spent_in_waypoint} steps. Will re-plan..."
+                    "[TIMEOUT] Timed out on reaching waypoint %d after %d steps "
+                    "(largest joint errors: %s; %s). Will re-plan...",
+                    self.trajectory_index,
+                    self.steps_spent_in_waypoint,
+                    self._describe_waypoint_error(waypoint),
+                    self._describe_stall(),
                 )
                 max_reattempts = getattr(self.config.policy_config, "max_planning_reattempts", 3)
                 if self.retry_count >= max_reattempts:

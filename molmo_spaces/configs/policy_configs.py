@@ -361,6 +361,26 @@ class CuroboPickAndPlacePlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     ]
 
 
+class RBY1RLPolicyConfig(CuroboPickAndPlacePlannerPolicyConfig):
+    """High-level SAC policy configuration over the existing RBY1 CuRobo stack."""
+
+    policy_type: str = "learned"
+    checkpoint_path: str | None = None
+    rl_device: str = "auto"
+    rl_deterministic: bool = True
+    rl_max_grasp_candidates: int = 24
+    rl_position_scale_m: float = 2.0
+    rl_max_base_translation_m: float = 0.5
+    rl_max_base_yaw_delta_rad: float = float(np.pi / 2)
+    rl_max_macro_steps: int = 4
+
+    def model_post_init(self, __context) -> None:
+        from molmo_spaces.policy.learned_policy.rby1_rl_policy import RBY1RLPolicy
+
+        self.policy_cls = RBY1RLPolicy
+        self.policy_factory = RBY1RLPolicy
+
+
 def panda_omron_planner_joint_ranges(
     planner_move_group_ids: list[str],
 ) -> dict[str, tuple[int, int]]:

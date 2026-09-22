@@ -74,6 +74,10 @@ dependencies = [
     "packaging~=26.2",
 ]
 [project.optional-dependencies]
+rl = [
+    # 2.9 requires torch>=2.8, while MolmoSpaces intentionally pins torch 2.7.
+    "stable-baselines3>=2.7.1,<2.9",
+]
 dev = [
     "mypy>=1.18.1",
     "pre-commit>=4.3.0",

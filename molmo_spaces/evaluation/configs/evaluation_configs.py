@@ -36,6 +36,7 @@ from molmo_spaces.configs.policy_configs import (
     BrownianMotionPolicyConfig,
     DummyPolicyConfig,
     LLMWaypointPlannerPolicyConfig,
+    RBY1RLPolicyConfig,
 )
 from molmo_spaces.configs.policy_configs_baselines import (
     CAPPolicyConfig,
@@ -196,6 +197,34 @@ class RBY1LLMWaypointPickPnPGeometricEvalConfig(RBY1LLMWaypointPickPnPEvalConfig
                 "llm_geometric_base_approach": True,
             }
         )
+
+
+class RBY1RLEvalConfig(RBY1PickAndPlaceDataGenConfig):
+    """RBY1 benchmark config for a staged SAC policy over CuRobo execution."""
+
+    requires_task_bound_policy: ClassVar[bool] = True
+    requires_policy_auxiliary_objects: ClassVar[bool] = True
+    filter_for_successful_trajectories: bool = False
+    end_on_success: bool = True
+    use_wandb: bool = False
+    policy_dt_ms: float = 100.0
+    ctrl_dt_ms: float = 20.0
+    sim_dt_ms: float = 4.0
+    task_horizon: int = 600
+    policy_config: RBY1RLPolicyConfig | None = None
+
+    def _init_policy_config(self) -> RBY1RLPolicyConfig:
+        base = super()._init_policy_config()
+        return RBY1RLPolicyConfig.model_validate(base.model_dump())
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        if self.policy_config is None:
+            raise RuntimeError(
+                "RBY1 RL evaluation requires the CUDA CuRobo runtime used by the existing "
+                "RBY1 benchmark planner."
+            )
+        self.robot_config.action_noise_config.enabled = False
 
 
 class PandaOmronCuroboPickPnPEvalConfig(

@@ -868,6 +868,7 @@ class CPUMujocoEnv(BaseMujocoEnv):
         excluded_positions: list[np.ndarray] | None = None,
         exclusion_threshold: float | None = None,
         save_visibility_frames_dir: Path | str | None = None,
+        candidate_limit: int = 1,
     ) -> bool:
         """
         Place robot near a target point or object with collision checking.
@@ -885,6 +886,9 @@ class CPUMujocoEnv(BaseMujocoEnv):
             excluded_positions: List of positions to avoid (e.g. previously used positions)
             exclusion_threshold: Minimum distance from any excluded position
             save_visibility_frames_dir: Optional directory to save camera frames during visibility check
+            candidate_limit: 收集多少个无碰撞候选后按底盘净空择优。默认 1 即"取第一个
+                可行点"的历史行为；大于 1 时会多采样几个落点，选择四周最宽敞的那个，
+                避免底盘停在当前无碰撞但一平移就被卡住的窄缝里。
 
         Returns:
             bool: True if placement was successful, False otherwise
@@ -1050,25 +1054,47 @@ class CPUMujocoEnv(BaseMujocoEnv):
                     if not self.check_if_robot_collision_at_base_pose(
                         robot_view, robot_pose, "robot_0/"
                     ):
-                        # Valid collision-free placement found - add to candidates
-                        collision_free_poses.append((robot_pose, robot_base_pos, robot_base_yaw))
-                        log.debug(
-                            f"[PLACE_ROBOT_NEAR] Found collision-free pose #{len(collision_free_poses)}"
+                        # 记录底盘净空。只取第一个可行点会挑到"当前无碰撞、四周很窄"
+                        # 的位置，底盘一旦需要平移就抵住障碍（E4 实测底盘卡在 stand
+                        # 上，base 关节差 0.03–0.04 rad 到不了，反复重试后 episode 失败）。
+                        # 占用图已按 robot_safety_radius 膨胀，净空即放下底盘后的余量。
+                        clearance = float(thormap.clearance_m(robot_base_pos))
+                        collision_free_poses.append(
+                            (robot_pose, robot_base_pos, robot_base_yaw, clearance)
                         )
-                        # If not checking visibility, we can return immediately with first valid pose
-                        if not check_camera_visibility:
-                            break
-                        # Otherwise, collect a few candidates for visibility checking
-                        # Stop early once we have enough candidates to avoid unnecessary collision checks
-                        if len(collision_free_poses) >= self.config.collision_free_pose_limit:
+                        log.debug(
+                            f"[PLACE_ROBOT_NEAR] Found collision-free pose "
+                            f"#{len(collision_free_poses)} (clearance={clearance:.3f}m)"
+                        )
+                        # 不查可见性时收集到 candidate_limit 个就够择优；查可见性时
+                        # 沿用原来的 collision_free_pose_limit。
+                        wanted = (
+                            self.config.collision_free_pose_limit
+                            if check_camera_visibility
+                            else max(1, candidate_limit)
+                        )
+                        if len(collision_free_poses) >= wanted:
                             break
                     elif attempt < 5:
                         log.debug(
                             "[PLACE_ROBOT_NEAR]   Collision detected, trying another point..."
                         )
 
+                # 按底盘净空降序：优先选四周最宽敞的落点。PHASE 2 的可见性检查按同
+                # 一顺序进行，因此最终选中的是"净空最大且满足约束"的候选。
+                if collision_free_poses:
+                    collision_free_poses.sort(key=lambda candidate: candidate[3], reverse=True)
+                    log.info(
+                        "[PLACE_ROBOT_NEAR] %d collision-free candidate(s), clearance "
+                        "%.3f-%.3f m, picking %.3f m",
+                        len(collision_free_poses),
+                        collision_free_poses[-1][3],
+                        collision_free_poses[0][3],
+                        collision_free_poses[0][3],
+                    )
+
                 # PHASE 2: Check visibility only on collision-free candidates (much fewer renders)
-                for pose_idx, (robot_pose, robot_base_pos, robot_base_yaw) in enumerate(
+                for pose_idx, (robot_pose, robot_base_pos, robot_base_yaw, _clearance) in enumerate(
                     collision_free_poses
                 ):
                     robot_view.base.pose = robot_pose

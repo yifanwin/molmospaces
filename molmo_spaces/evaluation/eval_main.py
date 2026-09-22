@@ -389,6 +389,10 @@ class EvalRuntimeParams:
     """Allowed planar distance from the pickup target during pose repair."""
     robot_base_pose_repair_map_radius: float = 0.40
     """Coarse occupancy-map radius; exact robot geometry is checked afterwards."""
+    robot_base_pose_repair_candidate_limit: int = 1
+    """收集多少个无碰撞候选后按底盘净空择优。1 = 取第一个可行点（历史行为）；
+    底盘较大的机器人在窄空间里需要更大的值，避免选到"当前无碰撞但一平移就被卡住"
+    的落点。"""
     robot_override_fn: OverrideFn | None = None
     """
     Hook that mutates the experiment config with robot-specific overrides.

@@ -12,6 +12,7 @@ import numpy as np
 from mujoco import MjData, MjModel
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+from scipy.ndimage import distance_transform_edt
 
 from molmo_spaces.env.mj_extensions import MjModelBindings
 from molmo_spaces.renderer.filament_rendering import MjFilamentRenderer
@@ -357,6 +358,45 @@ class ProcTHORMap(THORMap):
         ret[in_range_mask] = self.occupancy[pos_px[in_range_mask, 0], pos_px[in_range_mask, 1]]
         # ret[~in_range_mask] = True
         return ret
+
+    def clearance_m(self, pos_m: np.ndarray) -> float | np.ndarray:
+        """世界坐标处的底盘净空（米）：该点到最近障碍的距离。
+
+        占用图在构建时已按 agent_radius 膨胀过（``_apply_buffer_with_agent_radius``），
+        所以净空表示"以该点为圆心放下半径 agent_radius 的底盘后还剩多少余量"。
+        越界（地图外）按 0 处理：地图外没有自由空间信息，不应被当作宽敞。
+
+        Args:
+            pos_m: 世界坐标，形状 (3,) 或 (N, 3)。
+
+        Returns:
+            单个点的净空（float），或每个点的净空（(N,)）。
+        """
+        single = np.asarray(pos_m).ndim == 1
+        points = np.atleast_2d(np.asarray(pos_m, dtype=float))
+        pos_px = self.pos_m_to_px(points)
+        rows, cols = pos_px[:, 0], pos_px[:, 1]
+        in_range = (
+            (rows >= 0)
+            & (rows < self.occupancy.shape[0])
+            & (cols >= 0)
+            & (cols < self.occupancy.shape[1])
+        )
+        grid = self._clearance_grid()
+        clearance = np.zeros(len(rows), dtype=float)
+        clearance[in_range] = grid[rows[in_range], cols[in_range]]
+        return float(clearance[0]) if single else clearance
+
+    def _clearance_grid(self) -> np.ndarray:
+        """自由栅格到最近障碍的距离（米），按占用图内容惰性计算并缓存。"""
+        cached = getattr(self, "_clearance_cache", None)
+        if cached is not None and cached[0] is self.occupancy:
+            return cached[1]
+        # occupancy 中 True 为自由；distance_transform_edt 给出每个自由像素到最近
+        # 非自由像素的像素距离，换算成米即为净空。
+        grid = distance_transform_edt(self.occupancy).astype(np.float32) / float(self.px_per_m)
+        self._clearance_cache = (self.occupancy, grid)
+        return grid
 
     def save(self, path: str):
         if path.endswith(".png"):

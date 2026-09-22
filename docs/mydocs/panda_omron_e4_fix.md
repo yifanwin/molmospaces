@@ -70,6 +70,7 @@ PandaOmron 的 `pregrasp_z_offset` 已是 0.10 m，再额外进给 0.01 m 会让
 | 2 | `configs/policy_configs.py` + `evaluation/configs/evaluation_configs.py` | 新增 `grasp_settle_steps()`，E4 评测配置按 `policy_dt_ms` 反推 `max_grasping_timesteps`（**5 → 11 步 = 726 ms**，覆盖 500 ms 闭合 + 226 ms 稳定） |
 | 3 | `configs/policy_configs.py` + `policy/solvers/object_manipulation/curobo_pick_and_place_planner_policy.py` | 把写死的 `+ 0.01` 进给提为 `grasp_approach_overshoot` 配置项；**PandaOmron 置 0.0**，RBY1 保持 0.01（不影响 E2） |
 | 4 | `policy/solvers/curobo_planner_policy.py` | `[TIMEOUT]` 日志增加三类诊断：**关节级误差**、**外部接触对**、**各组关节速度**，用于区分"被挡住"与"伺服跟不上" |
+| 5 | `utils/scene_maps.py` + `env.py` + `evaluation/eval_main.py` + `evaluation/robot_eval_overrides.py` | **基座放置策略**：扩大粗筛半径并新增底盘净空择优（详见 §2.1） |
 
 修复 1 的日志形态（实测）：
 
@@ -79,6 +80,40 @@ Dropped 10 start-state overlapping cuboid(s) from the CuRobo world
 (robot link, obstacle, penetration m): [('omron_base', 'countertop_.../geom_487', 0.0029),
  ('panda_hand', 'papertowel_.../geom_685', 0.0214), ('panda_hand', 'place_receptacle/...', 0.0262), ...]
 ```
+
+### 2.1 基座放置策略
+
+**要解决的问题**：底盘卡在窄空间。实测形态是
+`mobilebase0_pedestal_feet_col ↔ stand` 接触、base 关节差 0.03–0.04 rad 到不了、
+episode 反复重试后失败（E4 的 idx 213 即为此类）。
+
+**两处根因**（都在 `env.place_robot_near`）：
+
+1. **粗筛半径小于底盘**。占用图按 `robot_base_pose_repair_map_radius = 0.40 m` 膨胀，
+   而实测底盘 `mobilebase0_pedestal_feet_col` 的水平半径是 **0.438 m**（其余
+   `mobilebase0_g0_col` / `g1_col` / `support` 只有 0.30 m 左右）。筛出来的"自由点"
+   其实放不下底盘，缺口有 4 cm。
+2. **取第一个可行点就返回**。`check_camera_visibility=False`（E4 的取值）时代码直接
+   `break`，完全不评估落点周围的空间，容易挑到"当前无碰撞、一平移就被卡住"的窄缝。
+
+**策略**：
+
+| 环节 | 做法 |
+|---|---|
+| 考虑底盘尺寸 | 粗筛半径提到 **0.45 m**（覆盖实测 0.438 m 并留余量） |
+| 考虑周围障碍 | 对膨胀后的占用图做**距离变换**，得到每个自由格的**净空**（到最近障碍的距离，米） |
+| 搜索落点 | 沿用目标周围 0.4–1.25 m 的采样范围，收集 **8 个**无碰撞候选（而非 1 个） |
+| 择优 | 按净空**降序**排序，选四周最宽敞的落点 |
+
+**接入点**：
+
+- `utils/scene_maps.py`：`ProcTHORMap.clearance_m(pos)` 与 `_clearance_grid()`（惰性计算并缓存）
+- `env.py`：`place_robot_near` 新增 `candidate_limit` 参数；候选记录净空并按净空排序
+- `evaluation/eval_main.py`：`robot_base_pose_repair_candidate_limit`（**默认 1 = 历史行为**）
+- `evaluation/robot_eval_overrides.py`：PandaOmron 侧设半径 `0.45` / 候选 `8`
+
+**零影响保证**：`candidate_limit=1` 时行为与改动前完全一致（仍是"取第一个可行点"），
+只有 PandaOmron 的评测覆盖会启用择优，其余机器人、数据生成与导航路径不受影响。
 
 ## 3. 验证
 
@@ -119,6 +154,41 @@ PREGRASP 规划实测 **0/4 → 4/4**。1/8 的成功率提升有限，是因为
 两者都不是本轮修复能覆盖的软件缺陷：前者需要抓取姿态层面的改进（报告 §9 P3 #17），
 后者需要基座放置策略或场景筛选。
 
+### 3.4 基座放置策略的验证
+
+测试对象是用户指定的、原 E4 日志中**全部失败且都带 `start-state overlaps`** 的场景。
+
+| house | idx | 物体 | 候选净空范围 → 选中 | 结果 | 失败主导关节 |
+|---|---|---|---|---|---|
+| 103 | 6 | spoon | 0.011–0.237 m → **0.237 m** | 失败 | `arm` |
+| 97 | 969 | candle | 0.020–0.393 m → **0.393 m** | 失败 | `arm` |
+| 97 | 970 | **ladle** | 0.055–0.507 m → **0.507 m** | ✅ **成功** | — |
+| 95 | 947 | papertowel | 0.015–**0.065** m → 0.065 m | 失败 | **`base` 卡住** |
+| 132 | 42 | Irishpotato | 未触发修复（起始位姿无碰撞） | 失败 | **`base` 卡住** |
+| 107 | 10 | egg | 0.090–0.433 m → **0.433 m** | 失败 | `arm` |
+| 107 | 11 | bottle | 未触发修复 | 未完成 | — |
+| 108 | 12 | winebottle | 0.065–0.150 m → **0.150 m** | 失败 | `arm` |
+
+**1 / 8 成功**（原日志 0 / 8）。
+
+**策略确实生效的地方**：
+
+1. **6 次触发择优时，每次都选到了净空最大的候选**。最极端的是 house 103：8 个候选里
+   净空最小的只有 **0.011 m**（1.1 cm，几乎贴着障碍），按改动前"取第一个可行点"很可能
+   就落在这种位置；现在选的是 0.237 m。
+2. **失败结构整体从"底盘"迁移到"机械臂"**。8 个 episode 里 4 个的主导失败关节是
+   `arm`；`base` 卡住只剩 2 个（且都有各自明确的原因，见下）。
+
+**策略边界（诚实记录）**：
+
+- **场景整体就窄**：house 95 的候选净空**上限只有 0.065 m**——附近根本没有宽敞点，
+  择优只能"矮子里拔将军"，底盘仍然被卡。这类场景需要扩大采样范围（去更远处找落点，
+  代价是机器人离目标更远）。
+- **运动中卡住**：house 132 起始位姿**无碰撞**（没触发修复），是在后续移动中撞上窄道。
+  这超出了"选起始落点"的作用范围，需要底盘路径层面的规划。
+
+**house 97 的 ladle 完整成功**是目前唯一的"细长物体"成功案例（E1 中 ladle 5.5%）。
+
 ## 4. 尚未解决
 
 1. **GRASP 阶段的物理阻挡**：修复 3 去掉了确定性的过度进给，但复跑 IDX 116 / 213
@@ -136,7 +206,7 @@ PREGRASP 规划实测 **0/4 → 4/4**。1/8 的成功率提升有限，是因为
 5. **薄片 / 细长物体抓取**：IDX 116 的实际失败点，与 E1/E3 的形态学结论一致
    （纸毛巾、纸巾、刀/勺/叉系统性失败）。需从抓取姿态采样与夹爪策略入手。
 
-## 6. 结论
+## 5. 结论
 
 本轮把 E4 的失败从**"规划死锁"**推进到**"可解释的物理限制"**：
 
@@ -149,20 +219,46 @@ PREGRASP 规划实测 **0/4 → 4/4**。1/8 的成功率提升有限，是因为
 **但成功率提升有限（验证集 0/8 → 1/8）**，因为死锁之下压着的是能力短板
 （薄片抓取）与场景约束（底盘卡支架），这两类不是软件缺陷，本轮修复不覆盖。
 
-## 5. 复现
+## 6. 复现
+
+### 6.1 先确认代码版本（重要）
+
+本仓库的 venv 是 `pip install -e` 装的，它的 `__editable___molmo_spaces_*_finder` 把
+`molmo_spaces` **硬编码到主工作区** `/data0/wenyifan/MoMaTrajGen/molmospaces`。该 finder
+挂在 `sys.meta_path` 上，**优先级高于 `sys.path`**，因此在 worktree 里直接执行
+`python -m molmo_spaces...`（或设 `PYTHONPATH`）**仍然会加载主工作区的代码**，
+worktree 里的修改不会生效。
+
+用仓库自带的 `scripts/run_from_source.py` 指定代码目录——它会摘掉 editable finder、
+把指定目录插到 `sys.path` 首位，并**断言实际解析到的包就在该目录下**（否则直接报错退出）。
+启动时会打印实际加载路径供核对：
+
+```
+[run_from_source] molmo_spaces = /data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4/molmo_spaces/__init__.py
+```
+
+### 6.2 跑评测
 
 ```bash
-cd /data0/wenyifan/MoMaTrajGen/molmospaces
+cd /data0/wenyifan/MoMaTrajGen/molmospaces          # 用这里的 venv 与 benchmark 数据
 CUDA_VISIBLE_DEVICES=3 MUJOCO_EGL_DEVICE_ID=3 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
-.venv/bin/python -m molmo_spaces.evaluation.eval_main \
-  molmo_spaces.evaluation.configs.evaluation_configs:PandaOmronCuroboPickPnPEvalConfig \
+.venv/bin/python /data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4/scripts/run_from_source.py \
+  --source /data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4 \
+  molmo_spaces.evaluation.eval_main -- \
   --benchmark_dir /nas/wenyifan/molmospaces_data/cache/benchmarks/molmospaces-bench-v1/20260408/procthor-10k/FrankaPickandPlaceDroidMiniBench/FrankaPickandPlaceDroidMiniBench_20260111_json_benchmark \
   --idx 116 --task_horizon_steps 606 --num_workers 1 --no_wandb \
   --output_dir eval_output/e4_verify
 ```
 
-单元测试：
+### 6.3 跑单元测试
 
 ```bash
-.venv/bin/python -m pytest mlspaces_tests/evaluation/test_panda_omron_curobo_eval.py -m "not slow"
+W=/data0/wenyifan/MoMaTrajGen/.worktrees/panda-omron-e4
+cd /data0/wenyifan/MoMaTrajGen/molmospaces
+.venv/bin/python $W/scripts/run_from_source.py --source $W \
+  pytest -- -q $W/mlspaces_tests/evaluation/test_panda_omron_curobo_eval.py -m "not slow"
 ```
+
+> `runpy` 会对 `molmo_spaces.evaluation.eval_main` 报一条
+> `RuntimeWarning: ... found in sys.modules after import of package ...`，这是
+> `molmo_spaces/evaluation/__init__.py` 会导入子模块导致的既有现象，不影响执行。

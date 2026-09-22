@@ -920,6 +920,7 @@ class JsonEvalTaskSampler(BaseMujocoTaskSampler):
                     preserve_z=float(original_pose[2, 3]),
                     face_target=True,
                     check_camera_visibility=False,
+                    candidate_limit=runtime_params.robot_base_pose_repair_candidate_limit,
                 )
             finally:
                 np.random.set_state(rng_state)

@@ -68,6 +68,14 @@ def panda_omron_robot_eval_override(
     # walls or furniture. Repair it after the scene has been restored, using
     # the actual PandaOmron MuJoCo collision geometry.
     exp_config.eval_runtime_params.repair_robot_base_pose_if_colliding = True
+    # 粗筛占用图的半径必须覆盖真实底盘，否则筛出来的"自由点"其实放不下底盘。
+    # 实测 mobilebase0_pedestal_feet_col 的水平半径是 0.438 m，默认的 0.40 m
+    # 少 4 cm —— E4 里底盘正是用这块几何抵住了 stand（base 关节差 0.03–0.04 rad
+    # 到不了，episode 反复重试后失败）。取 0.45 m 覆盖底盘并留一点余量。
+    exp_config.eval_runtime_params.robot_base_pose_repair_map_radius = 0.45
+    # 只取第一个无碰撞点会挑到"当前无碰撞、四周很窄"的位置。多采几个候选后按
+    # 底盘净空择优，让机器人落在四周最宽敞的地方，避免一平移就被卡住。
+    exp_config.eval_runtime_params.robot_base_pose_repair_candidate_limit = 8
 
 
 ROBOT_OVERRIDE_REGISTRY: dict[type[BaseRobotConfig], OverrideFn] = {

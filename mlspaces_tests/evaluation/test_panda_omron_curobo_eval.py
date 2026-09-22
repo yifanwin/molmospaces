@@ -152,3 +152,56 @@ def test_panda_omron_grasp_does_not_overshoot_into_support_surface():
     field = "grasp_approach_overshoot"
     assert CuroboPickAndPlacePlannerPolicyConfig.model_fields[field].default == 0.01
     assert PandaOmronCuroboPickAndPlacePlannerPolicyConfig.model_fields[field].default == 0.0
+
+
+def test_clearance_grid_measures_distance_to_nearest_obstacle():
+    """净空图 = 自由格到最近障碍的距离（米），用于判断底盘四周是否宽敞。"""
+    import numpy as np
+
+    from molmo_spaces.utils.scene_maps import ProcTHORMap
+
+    occupancy = np.ones((21, 21), dtype=bool)
+    occupancy[10, :] = False  # 第 10 行是障碍，其余自由
+
+    thor_map = ProcTHORMap(
+        occupancy=occupancy,
+        world_to_map=np.eye(4),
+        map_to_world=np.eye(4),
+        px_per_m=100,
+    )
+    grid = thor_map._clearance_grid()
+
+    assert grid[10, 0] == pytest.approx(0.0)  # 障碍本身
+    assert grid[5, 0] == pytest.approx(0.05)  # 距障碍 5 像素 = 5 cm
+    assert grid[0, 0] == pytest.approx(0.10)  # 距障碍 10 像素 = 10 cm
+
+
+def test_panda_omron_eval_override_widens_base_placement_search():
+    """底盘比默认粗筛半径更宽，评测覆盖必须放半径并启用净空择优。
+
+    实测 mobilebase0_pedestal_feet_col 的水平半径是 0.438 m，默认的
+    robot_base_pose_repair_map_radius=0.40 m 覆盖不住，筛出的"自由点"可能根本
+    放不下底盘。
+    """
+    from molmo_spaces.evaluation.robot_eval_overrides import (
+        panda_omron_robot_eval_override,
+    )
+
+    episode = SimpleNamespace(
+        robot=SimpleNamespace(robot_name="rby1m", init_qpos={}),
+        task={"robot_base_pose": [0.0] * 7},
+    )
+    initial_qpos = {"base": [0.0, 0.0, 0.0], "torso": [0.2], "arm": [0.0] * 7}
+    runtime = SimpleNamespace(
+        use_config_camera_system=False,
+        repair_robot_base_pose_if_colliding=False,
+    )
+    exp_config = SimpleNamespace(
+        robot_config=SimpleNamespace(name="panda_omron", init_qpos=initial_qpos),
+        eval_runtime_params=runtime,
+    )
+
+    panda_omron_robot_eval_override(episode, exp_config)
+
+    assert runtime.robot_base_pose_repair_map_radius >= 0.438
+    assert runtime.robot_base_pose_repair_candidate_limit > 1

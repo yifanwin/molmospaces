@@ -157,7 +157,9 @@ class RBY1LLMWaypointPickPnPEvalConfig(RBY1PickAndPlaceDataGenConfig):
             llm_max_grasp_ik_checks=96,
             # RBY1 的 torso 初始为全 0，只解锁单臂时桌面目标够不到
             # （实测 house 103 单臂残差 0.52 m / 172°，加 torso 后立即解出）。
-            # base 不动：本 policy 的直线插值不是避障导航器。
+            # base 仍只走直线插值（不是避障导航器），但可以被 LLM 指派移动：
+            # prompt 会给出 base_reference.candidates 候选菜单，每次移动都由
+            # _preflight_kinematics_and_contacts 的离散采样接触预检把关。
             llm_ik_extra_groups=["torso"],
         )
 

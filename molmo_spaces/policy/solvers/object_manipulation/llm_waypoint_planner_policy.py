@@ -111,21 +111,37 @@ class LLMWaypointPlan(BaseModel):
     robot: str
     arm: str
     grasp_candidate_id: int = Field(ge=0)
-    segments: list[PlanSegment] = Field(min_length=6, max_length=8)
+    # 上限 14 = 6 个 EE 相位 + 最多 8 段底盘移动。旧上限 8 把底盘移动焊死在 2 次。
+    segments: list[PlanSegment] = Field(min_length=6, max_length=14)
 
     @model_validator(mode="after")
     def fixed_phase_grammar(self):
+        """EE 相位的相对顺序是不变式；底盘段可以插在任意相位之间。
+
+        旧实现把底盘段也写死了槽位（base_approach 只能首位、base_transfer 只能
+        夹在 lift 与 preplace 之间），于是"先转向再抓、抬起后再横移"这类多段调整
+        无法表达。现在改成：只要两段底盘不相邻，就可以出现在任何位置，且允许同类
+        底盘段出现多次。底盘段的命名按"当时是否已夹持物体"划分——
+        base_approach 必须在 grasp 之前，base_transfer 必须在 grasp 之后、place
+        之前；这与 _compute_trajectory 里 holding 标志的翻转点严格对应。
+        """
         phases = [segment.phase for segment in self.segments]
+        base_phases = ("base_approach", "base_transfer")
         expected = ["pregrasp", "grasp", "lift", "preplace", "place", "retreat"]
-        if phases and phases[0] == "base_approach":
-            phases = phases[1:]
-        if "base_transfer" in phases:
-            idx = phases.index("base_transfer")
-            if idx != 3:
-                raise ValueError("base_transfer must occur between lift and preplace")
-            phases = phases[:idx] + phases[idx + 1 :]
-        if phases != expected:
+        ee_phases = [name for name in phases if name not in base_phases]
+        if ee_phases != expected:
             raise ValueError(f"invalid phase order: {phases}")
+        for prev, cur in zip(phases, phases[1:]):
+            if prev in base_phases and cur in base_phases:
+                # 相邻底盘段等价于一次移动，拆开只会重复 duration 与预检采样。
+                raise ValueError(f"two base segments must not be adjacent: {phases}")
+        grasp_idx = phases.index("grasp")
+        place_idx = phases.index("place")
+        for idx, name in enumerate(phases):
+            if name == "base_approach" and idx >= grasp_idx:
+                raise ValueError("base_approach must occur before grasp (not holding yet)")
+            if name == "base_transfer" and not grasp_idx < idx < place_idx:
+                raise ValueError("base_transfer must occur between grasp and place (holding)")
         return self
 
     @property
@@ -135,6 +151,12 @@ class LLMWaypointPlan(BaseModel):
 
 ApproachStrategy = Literal["top_down", "lateral"]
 
+# 底盘目标的两种写法：直接给 world 系 [x, y, yaw]，或引用 prompt 里
+# base_reference.candidates 的 id（如 "pickup_rotate_in_place"）。
+# 给出 id 写法是为了免去模型自编十五位小数的世界坐标：实测它抄推荐值时 94.5%
+# 逐位一致，一旦要自己编（approach 阶段推荐值恒为 null 时）就多半过不了预检。
+BaseGoalRef = list[float] | str
+
 
 class PlanBuildError(RuntimeError):
     """本地几何展开失败。
@@ -143,6 +165,27 @@ class PlanBuildError(RuntimeError):
     进入 LLM 重试循环——否则一个几何 bug 会被伪装成 N 次"模型错误"并白烧
     API 调用。
     """
+
+
+# steps 的相位集合：六个 EE 相位都要列全（steps 是整条序列的替代表述）。
+# retreat 出现在这里是为了保持清单完整，但它不允许挂 base_goal——它发生在放置
+# 之后、已松手，底盘段的命名规则（按夹持状态划分）在那里两不靠。
+StepPhase = Literal["pregrasp", "grasp", "lift", "preplace", "place", "retreat"]
+
+
+class StepDecision(BaseModel):
+    """模型对单个相位下的指令。steps 是"让模型决定每一步怎么做"的落点。
+
+    旧契约一次给平铺的八个字段，本地几何按写死的顺序展开，底盘最多动两次且槽位
+    固定。给 steps 之后，模型可以对每个相位单独表态：
+      - 只列相位、不带 base_goal 的步骤表示"这一步按默认几何走"；
+      - 带 base_goal 的相位表示"进入这一步之前，底盘先走到这个位姿"。
+    未提供 steps 时完全退回旧的固定展开，因此老 artifact 与旧 prompt 仍可复现。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    phase: StepPhase
+    base_goal: BaseGoalRef | None = None
 
 
 class LLMDecision(BaseModel):
@@ -166,9 +209,12 @@ class LLMDecision(BaseModel):
     approach_strategy: ApproachStrategy = "lateral"
     lift_height: float = Field(gt=0.0, le=1.0)
     preplace_height: float = Field(gt=0.0, le=1.0)
-    # world 系 [x_m, y_m, yaw_rad]；None 表示不移动底盘。
-    base_approach_goal: list[float] | None = None
-    base_transfer_goal: list[float] | None = None
+    # world 系 [x, y, yaw] 或 base_reference.candidates 里的候选 id；None = 不移动底盘。
+    base_approach_goal: BaseGoalRef | None = None
+    base_transfer_goal: BaseGoalRef | None = None
+    # 可选的分步决策。给了它就按它展开（允许任意位置插入底盘移动），
+    # 没给就退回固定顺序的六段 + 两段底盘。
+    steps: list[StepDecision] | None = None
     # 仅落盘供人工分析，不参与任何几何计算。
     rationale: str | None = Field(default=None, max_length=400)
 
@@ -180,10 +226,24 @@ class LLMDecision(BaseModel):
             goal = getattr(self, name)
             if goal is None:
                 continue
+            if isinstance(goal, str):
+                if not goal.strip():
+                    raise ValueError(f"{name} candidate id must not be empty")
+                continue
             if len(goal) != 3:
                 raise ValueError(f"{name} must be world-frame [x, y, yaw] with exactly 3 values")
             if not all(math.isfinite(value) for value in goal):
                 raise ValueError(f"{name} contains NaN or infinity")
+        for step in self.steps or []:
+            goal = step.base_goal
+            if goal is None or isinstance(goal, str):
+                continue
+            if len(goal) != 3:
+                raise ValueError(
+                    f"steps[{step.phase}].base_goal must be [x, y, yaw] with exactly 3 values"
+                )
+            if not all(math.isfinite(value) for value in goal):
+                raise ValueError(f"steps[{step.phase}].base_goal contains NaN or infinity")
         return self
 
 
@@ -214,26 +274,158 @@ def approach_tilt_deg(grasp: np.ndarray) -> float:
     return math.degrees(math.acos(float(np.clip(-grasp[2, 2], -1.0, 1.0))))
 
 
+def wrap_deg(angle_deg: float) -> float:
+    """把角度归一化到 (-180, 180]，供朝向偏差比较与反馈打印使用。"""
+    return (float(angle_deg) + 180.0) % 360.0 - 180.0
+
+
+def base_alignment(base_pose: np.ndarray, target_xy: np.ndarray) -> dict[str, float]:
+    """底盘相对目标物的朝向与距离诊断（世界系，角度制）。
+
+    yaw_error_deg 是本模块的核心诊断量。实测 RBY1 的 episode 起始底盘位置几乎总
+    落在 standoff 半径之内（2774 次 attempt 里 100% 落在 0.51-0.70 m），但底盘
+    朝向与"指向目标物方位角"仍有偏差：中位 21.1 度，26.7% 超过 30 度。旧实现只看
+    距离，已经在 standoff 内就返回 None，模型因此从来看不到这个偏差，底盘也就
+    从不转向——机械臂只能侧向或反向够物，扫过台面造成环境碰撞。
+
+    yaw 约定与 recommend_base_goal 一致：yaw=0 表示底盘 +X 朝向世界 +X，
+    "面向目标"即 yaw = atan2(dy, dx)。
+
+    注意 pose_mat_to_7d 的顺序是 [x, y, z, qw, qx, qy, qz]，第 4 个分量是 qw
+    不是 yaw；要拿 yaw 必须先还原成矩阵再取 atan2(R[1,0], R[0,0])。
+    """
+    base = np.asarray(base_pose, dtype=float)
+    if base.ndim == 2:
+        base_xy = base[:2, 3]
+        base_yaw = math.atan2(float(base[1, 0]), float(base[0, 0]))
+    else:
+        flat = base.reshape(-1)
+        base_xy = flat[:2]
+        base_yaw = float(flat[2]) if flat.size > 2 else 0.0
+    delta = np.asarray(target_xy, dtype=float).reshape(-1)[:2] - base_xy
+    distance = float(np.linalg.norm(delta))
+    bearing = math.atan2(float(delta[1]), float(delta[0]))
+    return {
+        "distance_m": distance,
+        "bearing_deg": math.degrees(bearing),
+        "base_yaw_deg": math.degrees(base_yaw),
+        "yaw_error_deg": wrap_deg(math.degrees(bearing - base_yaw)),
+    }
+
+
+def base_goal_candidates(
+    base_pose: np.ndarray,
+    target_xy: np.ndarray,
+    *,
+    standoff_m: float,
+    yaw_tolerance_deg: float,
+    xy_tolerance_m: float,
+    step_limit_m: float,
+    label: str,
+) -> list[dict[str, Any]]:
+    """给模型用的底盘候选菜单：围绕一个目标物给出若干"对齐到可抓站姿"的方案。
+
+    旧实现只给一个推荐值，且"已在 standoff 内就返回 None"，于是模型的全部选择
+    退化成"抄推荐值或自己编世界坐标"（实测有推荐值时可抄的 580 次里 548 次逐位
+    照抄，没有推荐值时 26% 自己编且多数过不了预检）。这里改成给一组带代价标注的
+    候选，让模型按 translation_m / rotation_deg 自己权衡——纯转向不移动位置、
+    碰撞风险最低，因此排在前面。
+
+    返回的每项是
+        {"id", "goal": [x, y, yaw], "translation_m", "rotation_deg", "note"}
+    位置与朝向都已达标时返回空列表（= 底盘不必动，可以填 null）。
+
+    底盘移动的避障仍完全靠 _preflight_kinematics_and_contacts 的离散采样接触
+    检查，不是路径规划；候选只沿"当前指向目标"收缩，不做绕障。
+    """
+    base = np.asarray(base_pose, dtype=float)
+    if base.ndim == 2:
+        base_xy = base[:2, 3]
+        base_yaw = math.atan2(float(base[1, 0]), float(base[0, 0]))
+    else:
+        flat = base.reshape(-1)
+        base_xy = flat[:2]
+        base_yaw = float(flat[2]) if flat.size > 2 else 0.0
+    target = np.asarray(target_xy, dtype=float).reshape(-1)[:2]
+    delta = target - base_xy
+    distance = float(np.linalg.norm(delta))
+    # 目标与底盘几乎重合时方位角无定义，此时不做任何缩放（避免除零）。
+    if distance < 1e-6:
+        return []
+    bearing = math.atan2(float(delta[1]), float(delta[0]))
+    yaw_error = abs(wrap_deg(math.degrees(bearing - base_yaw)))
+    standoff_error = abs(distance - standoff_m)
+
+    candidates: list[dict[str, Any]] = []
+
+    def add(kind: str, position: np.ndarray, note: str) -> None:
+        offset = position - base_xy
+        candidates.append(
+            {
+                "id": f"{label}_{kind}",
+                "goal": [
+                    round(float(position[0]), 4),
+                    round(float(position[1]), 4),
+                    round(float(bearing), 4),
+                ],
+                "translation_m": round(float(np.linalg.norm(offset)), 4),
+                "rotation_deg": round(yaw_error, 1),
+                "note": note,
+            }
+        )
+
+    # 1) 原地转向：只改 yaw、位置不动，碰撞风险最低，也最对症——实测回放 2774 次
+    #    attempt，首选候选里 95% 是它，且平移量恒为 0；旧实现因为"距离达标即 None"
+    #    让这条建议从未出现在 prompt 里。
+    if yaw_error > yaw_tolerance_deg:
+        add(
+            "rotate_in_place",
+            base_xy.copy(),
+            f"keep position, rotate {yaw_error:.0f} deg to face the target",
+        )
+    # 2) 退/进到 standoff 并转向：位置与朝向一次修正。
+    if standoff_error > xy_tolerance_m:
+        direction = delta / distance
+        position = target - standoff_m * direction
+        # 单次平移上限：避免一次给出跨越房间的目标（预检大概率撞）。
+        offset = position - base_xy
+        offset_norm = float(np.linalg.norm(offset))
+        if offset_norm > step_limit_m:
+            position = base_xy + step_limit_m * offset / offset_norm
+        add(
+            "standoff_face",
+            position,
+            f"move to {standoff_m:.2f} m standoff and face the target",
+        )
+    # 3) 位置与朝向都达标时不推荐任何移动，返回空列表让模型自己决定要不要动。
+    return candidates
+
+
 def recommend_base_goal(
     base_xy: np.ndarray,
     target_xy: np.ndarray,
     standoff_m: float,
     step_limit_m: float,
+    yaw_tolerance_deg: float = 15.0,
+    xy_tolerance_m: float = 0.15,
 ) -> list[float] | None:
-    """推荐一个底盘目标位姿：停在目标 standoff 距离处、yaw 面向目标。
+    """单一推荐底盘位姿（向后兼容入口，内部走 base_goal_candidates）。
 
-    作为几何先验提供给 LLM（它仍可自行决定是否采用）。底盘移动的避障完全靠
-    _preflight_kinematics_and_contacts 的离散采样接触检查，不是路径规划，因此
-    这里只沿"当前朝向目标收缩"给出保守解。已在 standoff 之内时返回 None。
+    与旧实现的唯一行为差异：不再"已在 standoff 之内就返回 None"，而是先看朝向——
+    位置达标但朝向偏了仍然推荐"原地转向"。只有位置与朝向都达标才返回 None。
+    老实现正是这条"距离达标即 None"让 100% 的 episode 拿不到 approach 阶段的底盘
+    推荐值，底盘因此从不转向。
     """
-    base_xy = np.asarray(base_xy, dtype=float)[:2]
-    delta = np.asarray(target_xy, dtype=float)[:2] - base_xy
-    distance = float(np.linalg.norm(delta))
-    if distance <= max(standoff_m, 1e-6):
-        return None
-    position = base_xy + min(distance - standoff_m, step_limit_m) * delta / distance
-    yaw = math.atan2(float(delta[1]), float(delta[0]))
-    return [float(position[0]), float(position[1]), float(yaw)]
+    candidates = base_goal_candidates(
+        np.asarray(base_xy, dtype=float),
+        np.asarray(target_xy, dtype=float),
+        standoff_m=standoff_m,
+        yaw_tolerance_deg=yaw_tolerance_deg,
+        xy_tolerance_m=xy_tolerance_m,
+        step_limit_m=step_limit_m,
+        label="target",
+    )
+    return list(candidates[0]["goal"]) if candidates else None
 
 
 def select_new_contacts(
@@ -308,6 +500,10 @@ def build_plan_from_decision(
 
     approach_strategy 不改变这里的几何：pregrasp 一律沿候选自身的接近轴退避。
     它的作用是在 _validate_decision 里校验候选姿态与所声称策略是否一致。
+
+    段序有两种来源：给了 decision.steps 就按模型的分步表态逐相位展开（底盘移动
+    可以挂在任意多个相位之前），没给就退回上面写死的六段 + 两段底盘。两条路径
+    产出的 EE 位姿完全相同，差别只在底盘段的数量与位置。
     """
     grasp = np.asarray(geometry.grasp, dtype=float)
     rotation = grasp[:3, :3]
@@ -346,23 +542,59 @@ def build_plan_from_decision(
         "retreat": speed_fast,
     }
 
+    ee_phases: tuple[Phase, ...] = (
+        "pregrasp",
+        "grasp",
+        "lift",
+        "preplace",
+        "place",
+        "retreat",
+    )
+    # 底盘段的命名按"进入该相位时是否已夹持物体"划分，与 PlanSegment 的语法校验
+    # 以及 _compute_trajectory 里 holding 标志的翻转点严格对应：
+    #   grasp 及之前 = 尚未夹持 → base_approach
+    #   grasp 之后、place 之前 = 已夹持 → base_transfer
+    grasp_index = ee_phases.index("grasp")
+
+    def base_phase_before(phase: Phase) -> Phase:
+        return "base_approach" if ee_phases.index(phase) <= grasp_index else "base_transfer"
+
     segments: list[PlanSegment] = []
-    if decision.base_approach_goal is not None:
-        segments.append(
-            _base_segment(
-                "base_approach", decision.base_approach_goal, current_base_xy, base_speed_mps
+    if decision.steps is not None:
+        # 分步展开：模型逐相位表态，底盘移动可以挂在任意一个（或多个）相位之前。
+        # positions / rotation / speeds 仍全部来自本地几何——模型依旧给不出位姿，
+        # 它决定的只是"哪一步之前先把底盘摆到哪"。
+        for step in decision.steps:
+            if step.base_goal is not None:
+                segments.append(
+                    _base_segment(
+                        base_phase_before(step.phase),
+                        step.base_goal,
+                        current_base_xy,
+                        base_speed_mps,
+                    )
+                )
+            segments.append(
+                _ee_segment(step.phase, positions[step.phase], rotation, speeds[step.phase])
             )
-        )
-    for phase in ("pregrasp", "grasp", "lift"):
-        segments.append(_ee_segment(phase, positions[phase], rotation, speeds[phase]))
-    if decision.base_transfer_goal is not None:
-        segments.append(
-            _base_segment(
-                "base_transfer", decision.base_transfer_goal, current_base_xy, base_speed_mps
+    else:
+        # 固定展开（旧行为，未给 steps 时逐位保留）。
+        if decision.base_approach_goal is not None:
+            segments.append(
+                _base_segment(
+                    "base_approach", decision.base_approach_goal, current_base_xy, base_speed_mps
+                )
             )
-        )
-    for phase in ("preplace", "place", "retreat"):
-        segments.append(_ee_segment(phase, positions[phase], rotation, speeds[phase]))
+        for phase in ("pregrasp", "grasp", "lift"):
+            segments.append(_ee_segment(phase, positions[phase], rotation, speeds[phase]))
+        if decision.base_transfer_goal is not None:
+            segments.append(
+                _base_segment(
+                    "base_transfer", decision.base_transfer_goal, current_base_xy, base_speed_mps
+                )
+            )
+        for phase in ("preplace", "place", "retreat"):
+            segments.append(_ee_segment(phase, positions[phase], rotation, speeds[phase]))
 
     plan = LLMWaypointPlan(
         robot=decision.robot,
@@ -840,6 +1072,12 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         lo_lift, hi_lift = self.policy_config.llm_lift_height_bounds
         lo_pre, hi_pre = self.policy_config.llm_preplace_height_bounds
         base_xy = self.robot_view.base.pose[:3, 3][:2]
+        # 与 _resolve_base_goal_refs 共用同一份候选菜单，保证模型引用的 id 一定能解析。
+        # 底盘不可动时整体置空：推荐值与候选一起变 null，模型不会去引用一个本机器人
+        # 根本执行不了的位姿。
+        menu = self._base_menu(pickup_obj, receptacle)
+        if not self._base_is_movable():
+            menu = {"pickup": [], "receptacle": []}
         return {
             "output_contract": {
                 "json_schema": LLMDecision.model_json_schema(),
@@ -864,7 +1102,11 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                     "base_transfer_goal": None,
                     "rationale": "one short sentence",
                 },
-                "base_goal_format": "world-frame [x_m,y_m,yaw_rad]; exactly 3 values, not the 7-value pose format; null keeps the base fixed",
+                "base_goal_format": (
+                    "either a world-frame [x_m,y_m,yaw_rad] triple, or one of the ids under "
+                    "base_reference.candidates (e.g. \"pickup_rotate_in_place\"); null keeps "
+                    "the base fixed for that step"
+                ),
                 "forbidden": [
                     "markdown or prose",
                     "unknown fields",
@@ -881,9 +1123,26 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                 "place": "object bottom resting on the receptacle top",
                 "retreat": "place pose retreated along the approach axis",
                 "orientation": "all six end-effector targets keep the selected grasp orientation; the grasped object is never rotated in transit",
-                "base_approach": "base segment before pregrasp; null omits it",
-                "base_transfer": "base segment right after lift; null omits it",
+                "base_approach": "base segment inserted before pregrasp or grasp; null omits it",
+                "base_transfer": "base segment inserted between grasp and place (while holding); null omits it",
                 "base_and_ee": "moving the base does NOT move the end-effector targets, which stay world-anchored to the object and receptacle",
+                "base_decisions": (
+                    "you decide whether and where the base moves, and before which step; "
+                    "base_reference.alignment shows your current facing error and "
+                    "base_reference.candidates lists concrete goals with their translation and "
+                    "rotation cost. The most common useful move is a pure rotation into the "
+                    "candidate's standoff facing - it does not translate and barely risks collision"
+                ),
+                "steps": (
+                    "optional. To decide step by step, list all six ee phases in order "
+                    "(pregrasp, grasp, lift, preplace, place, retreat) and attach base_goal to "
+                    "any of them to move the base before that step, e.g. "
+                    "[{\"phase\":\"pregrasp\",\"base_goal\":\"pickup_rotate_in_place\"},"
+                    "{\"phase\":\"grasp\"},{\"phase\":\"lift\"},"
+                    "{\"phase\":\"preplace\",\"base_goal\":\"receptacle_rotate_in_place\"},"
+                    "{\"phase\":\"place\"},{\"phase\":\"retreat\"}]. "
+                    "When steps is present, leave base_approach_goal and base_transfer_goal null"
+                ),
             },
             "constraints": {
                 "approach_strategy_rule": "top_down and lateral generate identical geometry; top_down additionally requires the candidate approach axis to be within top_down_max_tilt_deg of straight down, so it is rejected for a side grasp",
@@ -900,20 +1159,59 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
             },
             "base_reference": {
                 "base_xy": np.asarray(base_xy, dtype=float).round(4).tolist(),
+                "base_yaw_deg": round(
+                    math.degrees(
+                        math.atan2(
+                            float(self.robot_view.base.pose[1, 0]),
+                            float(self.robot_view.base.pose[0, 0]),
+                        )
+                    ),
+                    2,
+                ),
                 "base_is_movable": self._base_is_movable(),
-                "recommended_base_approach_goal": recommend_base_goal(
-                    base_xy,
-                    pickup_obj.position[:2],
-                    self.policy_config.llm_base_standoff_target_m,
-                    self.policy_config.llm_base_step_limit_m,
+                # 当前朝向偏差。这是本轮新增的核心诊断量：实测底盘朝向与"指向目标物
+                # 方位角"偏差中位 21.1 度、26.7% 超过 30 度，而旧 prompt 完全没暴露
+                # 这个量——模型只能看见一个恒为 null 的推荐值。
+                "alignment": {
+                    "pickup": {
+                        key: round(value, 3)
+                        for key, value in base_alignment(
+                            self.robot_view.base.pose, pickup_obj.position[:2]
+                        ).items()
+                    },
+                    "receptacle": {
+                        key: round(value, 3)
+                        for key, value in base_alignment(
+                            self.robot_view.base.pose, receptacle.position[:2]
+                        ).items()
+                    },
+                    "meaning": (
+                        "yaw_error_deg = how far the base is from facing the target "
+                        "(wrapped to (-180, 180]); a large value means the arm has to reach "
+                        "sideways or backwards, which is what drives the counter collisions"
+                    ),
+                },
+                # 候选菜单：位置与朝向都已对好时该组为空列表（底盘不必动）。
+                # 每项带 translation_m / rotation_deg，让模型按代价自行取舍——
+                # rotate_in_place 不移动位置、只转向，碰撞风险最低。
+                "candidates": menu,
+                "candidate_usage": (
+                    "base_approach_goal / base_transfer_goal / steps[].base_goal accept either a "
+                    "world-frame [x, y, yaw] triple or one of these candidate ids"
                 ),
-                "recommended_base_transfer_goal": recommend_base_goal(
-                    base_xy,
-                    receptacle.position[:2],
-                    self.policy_config.llm_base_standoff_target_m,
-                    self.policy_config.llm_base_step_limit_m,
+                # 向后兼容的单一推荐值，现由候选菜单派生（旧实现传 2 维 base_xy 会让
+                # "当前 yaw"被当成 0，转向判断随之失效）。
+                "recommended_base_approach_goal": (
+                    list(menu["pickup"][0]["goal"]) if menu["pickup"] else None
                 ),
-                "note": "recommendations are conservative standoff poses facing the target; any collision during the base move is caught by the local preflight and reported back to you",
+                "recommended_base_transfer_goal": (
+                    list(menu["receptacle"][0]["goal"]) if menu["receptacle"] else None
+                ),
+                "note": (
+                    "recommendations are conservative standoff poses facing the target; "
+                    "any collision during the base move is caught by the local preflight "
+                    "and reported back to you"
+                ),
             },
             "robot": self.robot_view.name,
             "base_pose": pose_mat_to_7d(self.robot_view.base.pose).tolist(),
@@ -961,6 +1259,77 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         """pregrasp 沿接近轴的退避距离。None 表示复用几何 baseline 的 pregrasp_z_offset。"""
         standoff = self.policy_config.llm_pregrasp_standoff_m
         return self.policy_config.pregrasp_z_offset if standoff is None else standoff
+
+    def _base_menu(
+        self, pickup_obj: MlSpacesObject, receptacle: MlSpacesObject
+    ) -> dict[str, list[dict[str, Any]]]:
+        """底盘候选菜单（pickup / receptacle 两组），围绕抓取站姿与放置站姿。
+
+        _scene_payload 把它写进 base_reference.candidates，_resolve_base_goal_refs
+        用同一份把候选 id 翻回 world 位姿——两处必须一致，所以只在这里构造一次。
+        """
+        config = self.policy_config
+        kwargs = {
+            "standoff_m": config.llm_base_standoff_target_m,
+            "yaw_tolerance_deg": config.llm_base_yaw_tolerance_deg,
+            "xy_tolerance_m": config.llm_base_xy_tolerance_m,
+            "step_limit_m": config.llm_base_step_limit_m,
+        }
+        return {
+            "pickup": base_goal_candidates(
+                self.robot_view.base.pose, pickup_obj.position[:2], label="pickup", **kwargs
+            ),
+            "receptacle": base_goal_candidates(
+                self.robot_view.base.pose, receptacle.position[:2], label="receptacle", **kwargs
+            ),
+        }
+
+    def _resolve_base_goal_ref(
+        self,
+        goal: BaseGoalRef | None,
+        menu: dict[str, list[dict[str, Any]]],
+        field: str,
+    ) -> list[float] | None:
+        """把候选 id 或 [x, y, yaw] 统一翻成 world 位姿。
+
+        候选 id 必须出现在本次 prompt 给出的菜单里，否则拒绝——这样模型的"引用"
+        永远指向它真正看过的值，而不是随手编的自由字符串。
+        """
+        if goal is None:
+            return None
+        if isinstance(goal, str):
+            for candidates in menu.values():
+                for candidate in candidates:
+                    if candidate["id"] == goal:
+                        return [float(value) for value in candidate["goal"]]
+            known = [candidate["id"] for candidates in menu.values() for candidate in candidates]
+            raise PlanValidationError(
+                f"{field} refers to unknown base candidate {goal!r}; use one of {known} "
+                "or a world-frame [x, y, yaw] triple"
+            )
+        return [float(value) for value in goal]
+
+    def _resolve_base_goal_refs(
+        self, decision: LLMDecision, menu: dict[str, list[dict[str, Any]]]
+    ) -> LLMDecision:
+        """返回把候选 id 解析成 world 位姿后的决策副本，原对象不动。
+
+        原始 decision 仍原样落盘（record["decision"]），解析结果另存
+        record["resolved_decision"]——分析"模型到底抄没抄推荐值"要靠原始那份。
+        """
+        resolved = decision.model_copy(deep=True)
+        resolved.base_approach_goal = self._resolve_base_goal_ref(
+            decision.base_approach_goal, menu, "base_approach_goal"
+        )
+        resolved.base_transfer_goal = self._resolve_base_goal_ref(
+            decision.base_transfer_goal, menu, "base_transfer_goal"
+        )
+        if decision.steps is not None and resolved.steps is not None:
+            for source, target in zip(decision.steps, resolved.steps):
+                target.base_goal = self._resolve_base_goal_ref(
+                    source.base_goal, menu, f"steps[{source.phase}].base_goal"
+                )
+        return resolved
 
     def _geometry_for_candidate(
         self,
@@ -1021,11 +1390,15 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
 
         base_goal = None
         if self.policy_config.llm_geometric_base_approach and self._base_is_movable():
+            # 传完整 4x4 位姿而不是 [:2] 的 x,y：只给平面坐标会让"当前 yaw"退化成 0，
+            # 朝向偏差算错，转向建议随之失效。
             base_goal = recommend_base_goal(
-                self.robot_view.base.pose[:3, 3][:2],
+                self.robot_view.base.pose,
                 pickup_obj.position[:2],
                 self.policy_config.llm_base_standoff_target_m,
                 self.policy_config.llm_base_step_limit_m,
+                yaw_tolerance_deg=self.policy_config.llm_base_yaw_tolerance_deg,
+                xy_tolerance_m=self.policy_config.llm_base_xy_tolerance_m,
             )
 
         tilt = approach_tilt_deg(geometry.grasp)
@@ -1050,17 +1423,21 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         "collision": [
             "base_approach_goal",
             "base_transfer_goal",
+            "steps",
             "grasp_candidate_id",
             "approach_strategy",
         ],
         "ik": [
             "base_approach_goal",
             "base_transfer_goal",
+            "steps",
             "grasp_candidate_id",
             "arm",
             "approach_strategy",
         ],
         "base_radius": ["base_approach_goal", "base_transfer_goal"],
+        # 引用了菜单里不存在的候选 id。
+        "base_goal": ["base_approach_goal", "base_transfer_goal"],
         "tilt": ["approach_strategy", "grasp_candidate_id"],
         "height": ["lift_height", "preplace_height"],
         "decision": [
@@ -1074,7 +1451,11 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         "api": [],
     }
 
-    def _feedback_from_error(self, exc: BaseException) -> dict[str, Any]:
+    def _feedback_from_error(
+        self,
+        exc: BaseException,
+        menu: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
         """把一次校验失败翻译成模型可执行的调整建议。
 
         错误串里的 "IK failed" / "collision" 等子串必须保留：
@@ -1090,6 +1471,8 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
             reason = "collision"
         elif "IK failed" in message:
             reason = "ik"
+        elif "base candidate" in message:
+            reason = "base_goal"
         elif "base goal" in message:
             reason = "base_radius"
         elif "approach_tilt" in message:
@@ -1122,6 +1505,21 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
         }
         if phase is not None:
             feedback["failed_phase"] = phase
+        # 碰撞 / IK / 底盘半径这三类失败，模型最需要的是"换成哪个具体底盘位姿"。
+        # 只告诉它 base_goal 可调（旧行为）等于让它继续自己编世界坐标——实测那样
+        # 编出来的值多半过不了预检。这里把失败相位对应的候选菜单直接附上。
+        if menu is not None and reason in ("collision", "ik", "base_radius", "base_goal"):
+            group = "pickup" if phase in ("base_approach", "pregrasp", "grasp", None) else "receptacle"
+            other = "receptacle" if group == "pickup" else "pickup"
+            feedback["base_candidates"] = {
+                group: menu.get(group, []),
+                "hint": (
+                    f"the failure is on phase {phase!r}; these goals are pre-checked standoff "
+                    f"poses for the {group}. Prefer a candidate whose translation_m is small "
+                    "(pure rotations barely risk collision). "
+                    f"The {other} group is also still available."
+                ),
+            }
         return feedback
 
     def _request_valid_plan(
@@ -1194,6 +1592,10 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
 
                 previous_decision = decision
                 record["decision"] = decision.model_dump(mode="json")
+                # 候选 id -> world 位姿。原始 decision 已经落盘，这里另存解析结果，
+                # 因为分析"模型到底抄没抄推荐值"必须看原始那份。
+                decision = self._resolve_base_goal_refs(decision, self._base_menu(pickup_obj, receptacle))
+                record["resolved_decision"] = decision.model_dump(mode="json")
                 geometry = self._validate_decision(
                     decision, pickup_obj, receptacle, candidates, candidate_arms
                 )
@@ -1226,7 +1628,9 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
             except (RuntimeError, ValidationError, PlanValidationError, ValueError) as exc:
                 previous_error = f"{type(exc).__name__}: {exc}"
                 error_history.append(previous_error)
-                feedback = self._feedback_from_error(exc)
+                feedback = self._feedback_from_error(
+                    exc, self._base_menu(pickup_obj, receptacle)
+                )
                 record.update(
                     valid=False,
                     error=previous_error,
@@ -1302,11 +1706,47 @@ class LLMWaypointPlannerPolicy(PickAndPlacePlannerPolicy):
                 f"llm_preplace_height_bounds [{lo_pre:.3f}, {hi_pre:.3f}] m"
             )
 
+        # steps 与扁平底盘字段是同一件事的两种写法，同时给会让"以哪个为准"变得
+        # 含糊；直接拒绝并说清怎么改，比静默取其一可预期。
+        ee_phases = ("pregrasp", "grasp", "lift", "preplace", "place", "retreat")
+        if decision.steps is not None:
+            step_phases = [step.phase for step in decision.steps]
+            repeated = sorted({name for name in step_phases if step_phases.count(name) > 1})
+            if repeated:
+                raise PlanValidationError(f"steps repeats phases {repeated}; list each exactly once")
+            missing = [name for name in ee_phases if name not in step_phases]
+            if missing:
+                raise PlanValidationError(
+                    f"steps is missing phases {missing}; list all six in order: {list(ee_phases)}"
+                )
+            if decision.base_approach_goal is not None or decision.base_transfer_goal is not None:
+                raise PlanValidationError(
+                    "base_approach_goal/base_transfer_goal and steps[].base_goal are two ways to "
+                    "say the same thing; set the base moves inside steps and leave the flat "
+                    "fields null, or drop steps entirely"
+                )
+            base_moves = sum(1 for step in decision.steps if step.base_goal is not None)
+            if base_moves > self.policy_config.llm_base_max_moves:
+                raise PlanValidationError(
+                    f"steps requests {base_moves} base moves, more than "
+                    f"llm_base_max_moves={self.policy_config.llm_base_max_moves}; "
+                    "each move costs at least 2 s of the episode budget"
+                )
+            if any(step.phase == "retreat" and step.base_goal is not None for step in decision.steps):
+                raise PlanValidationError(
+                    "retreat cannot carry a base_goal: it happens after the object is "
+                    "released, so the move is neither a base_approach nor a base_transfer; "
+                    "attach the base_goal to preplace or place instead"
+                )
+
         base_goals = [
             goal
             for goal in (decision.base_approach_goal, decision.base_transfer_goal)
             if goal is not None
         ]
+        base_goals.extend(
+            step.base_goal for step in (decision.steps or []) if step.base_goal is not None
+        )
         if base_goals and not self._base_is_movable():
             raise PlanValidationError(
                 "this robot's base is not a 3-DoF (x, y, yaw) holonomic base; "

@@ -55,3 +55,6 @@ mlspaces_tests/**/test_data
 __pycache__/
 data
 test_outputs
+
+# 工作副本复用的主工作区虚拟环境（软链，绝不入库）
+.venv

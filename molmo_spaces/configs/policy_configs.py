@@ -243,6 +243,18 @@ class LLMWaypointPlannerPolicyConfig(PickAndPlacePlannerPolicyConfig):
     llm_base_standoff_target_m: float = 0.75
     # 单次底盘移动的最大平移量，应 <= llm_base_xy_limit_m。
     llm_base_step_limit_m: float = 1.0
+    # 底盘"已经对好"的判据：位置与朝向都进入容差内才算不必移动，此时候选菜单
+    # 为空、推荐值为 None。旧实现只看位置（且是"距离 <= standoff 即 None"），实测
+    # 2774 次 attempt 的起始位置 100% 落在 standoff 内，于是 approach 阶段的推荐值
+    # 恒为 null；而底盘朝向与目标方位角的偏差中位 21.1 度、26.7% 超过 30 度——底盘
+    # 因此从不转向。朝向容差取 15 度：更松会让"面向目标"失去意义，更紧会让候选菜单
+    # 在约三成的 episode 上反复刷同一条转向建议。
+    llm_base_yaw_tolerance_deg: float = 15.0
+    llm_base_xy_tolerance_m: float = 0.15
+    # 一个计划里最多几段底盘移动。语法层允许到 8 段，但 task_horizon=600 步
+    # （policy_dt 100 ms ≈ 60 s），而每段底盘至少占 2 s，不设上限会把整回合
+    # 的预算耗在移动上。3 段足够表达"抓前转向 → 抬起后横移 → 放前微调"。
+    llm_base_max_moves: int = 3
     # geometric 档是否使用推荐底盘位姿。默认 False = 与几何 baseline 一样不动底盘，
     # 保证 geometric 档与 baseline 逐位可比；打开后得到"几何 + 移动底盘"的更强下界。
     llm_geometric_base_approach: bool = False

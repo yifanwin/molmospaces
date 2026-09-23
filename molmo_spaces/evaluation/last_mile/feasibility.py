@@ -540,3 +540,32 @@ class ManipulationFeasibilityEvaluator:
             "llm_used": False,
         })
         return result
+
+    def check_base_poses(self, snapshot, robot, base_poses, target) -> dict[str, Any]:
+        """按 P2 ``F_base`` 语义检查一串完整机器人底盘位姿。
+
+        整串位姿只恢复一次快照，供 P3 的廉价静态预检和走廊 ``C(A,B)``
+        使用。正常或碰撞退出后均恢复原快照。
+        """
+        if robot is not self.robot:
+            raise ValueError("robot 必须是 task.env.current_robot")
+        poses = [np.asarray(pose, dtype=float).copy() for pose in base_poses]
+        target = self._target(target)
+        with snapshot.restored(self.task):
+            target_root = int(target.object_root_id)
+            for index, pose in enumerate(poses):
+                self._set_base_pose(pose)
+                collisions = self._contact_rows(target_root, None, False)
+                if collisions:
+                    return {
+                        "collision_free": False,
+                        "checked_poses": index + 1,
+                        "first_collision_index": index,
+                        "collisions": collisions,
+                    }
+        return {
+            "collision_free": True,
+            "checked_poses": len(poses),
+            "first_collision_index": None,
+            "collisions": [],
+        }

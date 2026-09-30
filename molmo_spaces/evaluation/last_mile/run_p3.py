@@ -247,7 +247,8 @@ def _run_valid_episode(index, episode, row, p1_result, p2_result, roots, output,
         with snapshot.restored(task):
             target_xy = target.pose[:2, 3].copy()
         heuristic_rows = []
-        for h_index, distance in enumerate(PROTOCOL["heuristic_distances_m"]):
+        distances = (0.65,) if roots.get("subset") == "formal" else PROTOCOL["heuristic_distances_m"]
+        for h_index, distance in enumerate(distances):
             definition = heuristic_pose(a, target_xy, distance)
             value = {"heuristic_distance_m": distance, "point_id": f"H{h_index}",
                      "fixed_id": 1000 + h_index, "in_main_disk": True, "is_A": False,
@@ -388,7 +389,7 @@ def _skip_result(index, row, p1_result, p2_result, inputs_sha):
             "skip_reason": "invalid_A", "inputs_sha256": inputs_sha}
 
 
-def aggregate(results, output: Path, inputs_path: Path):
+def aggregate(results, output: Path, inputs_path: Path, subset: str = "pilot"):
     results = sorted(results, key=lambda value: value["subset_index"])
     valid = [value for value in results if value["p1_status"] == "completed"]
     completed = [value for value in valid if value["status"] == "completed"]
@@ -402,7 +403,8 @@ def aggregate(results, output: Path, inputs_path: Path):
 
     # 试点选择 fixed-radius，先按可达数、再按可行数，最后采用冻结偏好次序。
     heuristic_scores = {}
-    for distance in PROTOCOL["heuristic_distances_m"]:
+    distances = (0.65,) if subset == "formal" else PROTOCOL["heuristic_distances_m"]
+    for distance in distances:
         rows = [row for value in completed for row in value["heuristics"]
                 if row["heuristic_distance_m"] == distance]
         heuristic_scores[str(distance)] = {
@@ -414,7 +416,7 @@ def aggregate(results, output: Path, inputs_path: Path):
                                      for row in rows),
         }
     tie_rank = {value: -index for index, value in enumerate(PROTOCOL["heuristic_tie_order_m"])}
-    selected_distance = max(PROTOCOL["heuristic_distances_m"], key=lambda distance: (
+    selected_distance = max(distances, key=lambda distance: (
         heuristic_scores[str(distance)]["reachable_feasible"],
         heuristic_scores[str(distance)]["feasible"], tie_rank[distance]
     )) if completed else None
@@ -429,33 +431,40 @@ def aggregate(results, output: Path, inputs_path: Path):
             "rate": sum(row["rescued"] for row in rows) / len(rows) if rows else None,
             "rate_upper": sum(row["rescue_upper"] for row in rows) / len(rows) if rows else None,
         }
-    m = sum(value["A_status"] == "not_found" for value in completed)
-    l_geo = sum(value["A_status"] == "not_found" and value["geo_rescue"] for value in completed)
-    l_reach = sum(value["A_status"] == "not_found" and value["reachable_rescue"] for value in completed)
-    upper = l_reach + sum(value["A_status"] == "not_found" and
-                          not value["reachable_rescue"] and value["reachable_unknown"]
-                          for value in completed)
+    determinate = [value for value in completed if not value["reachable_unknown"]]
+    m = sum(value["A_status"] == "not_found" for value in determinate)
+    l_geo = sum(value["A_status"] == "not_found" and value["geo_rescue"] for value in determinate)
+    l_reach = sum(value["A_status"] == "not_found" and value["reachable_rescue"] for value in determinate)
+    m_all = sum(value["A_status"] == "not_found" for value in completed)
+    known_rescues_all = sum(value["A_status"] == "not_found" and value["reachable_rescue"]
+                            for value in completed)
+    upper = known_rescues_all + sum(value["A_status"] == "not_found" and
+                                    not value["reachable_rescue"] and value["reachable_unknown"]
+                                    for value in completed)
+    n_eval = len(determinate)
     metrics = {
         "schema_version": 1, "experiment": PROTOCOL["name"],
         "N_attempt": len(results), "N_nav": len(valid),
-        "N_eval": sum(not value["reachable_unknown"] for value in completed),
+        "N_eval": n_eval,
         "N_scan_complete": len(completed), "M_A_not_found": m,
         "L_geo": l_geo, "L_reach": l_reach, "L_reach_upper": upper,
-        "I_geo": l_geo / len(completed) if completed else None,
-        "I_reach": l_reach / len(completed) if completed else None,
-        "I_reach_upper": upper / len(completed) if completed else None,
+        "I_geo": l_geo / n_eval if n_eval else None,
+        "I_reach": l_reach / n_eval if n_eval else None,
+        "I_reach_all_valid_lower": known_rescues_all / len(valid) if valid else None,
+        "I_reach_upper": upper / len(valid) if valid else None,
         "R_oracle": l_reach / m if m else None,
-        "R_oracle_upper": upper / m if m else None,
+        "R_oracle_upper": upper / m_all if m_all else None,
         "nav_only_rescues": 0,
         "random_local": random_metrics,
         "heuristic_calibration": heuristic_scores,
         "selected_heuristic_distance_m": selected_distance,
-        "pilot_go_signal": l_reach >= PROTOCOL["pilot_go_signal_min_rescues"],
-        "formal_100": "not_run", "real_pick": "not_run",
-        "inference": "descriptive_only_five_valid_A",
+        "pilot_go_signal": l_reach >= PROTOCOL["pilot_go_signal_min_rescues"] if subset == "pilot" else None,
+        "formal_100": "not_run" if subset == "pilot" else "scan_completed", "real_pick": "not_run",
+        "inference": "descriptive_only_pilot" if subset == "pilot" else "formal_scan_only_no_real_pick",
     }
     atomic_json(output / "metrics.json", metrics)
-    complete = (len(results) == 10 and len(valid) == 5 and len(completed) == 5 and
+    complete = (len(results) == (10 if subset == "pilot" else 100) and
+                len(completed) == len(valid) and
                 all(value["grid_points"] == 245 and value["main_disk_points"] == 145 and
                     value["additional_grid_queries"] == 244 for value in completed))
     summary = {"experiment": PROTOCOL["name"], "attempted": len(results),
@@ -476,6 +485,7 @@ def aggregate(results, output: Path, inputs_path: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--p0-root", type=Path, required=True)
+    parser.add_argument("--subset", choices=("pilot", "formal"), default="pilot")
     parser.add_argument("--p0-validation", type=Path, required=True)
     parser.add_argument("--p1-root", type=Path, required=True)
     parser.add_argument("--p1-reference", type=Path, required=True,
@@ -494,12 +504,12 @@ def main():
     if args.max_b_points is not None and args.episode_index is None:
         raise ValueError("--max-b-points 必须同时指定单个 --episode-index")
     inputs = {
-        "schema_version": 1, "protocol": PROTOCOL,
+        "schema_version": 1, "protocol": dict(PROTOCOL, subset=args.subset),
         "corridor": CORRIDOR.__dict__,
         "p0_validation_complete_sha256": digest(args.p0_validation / "COMPLETE.json"),
         "p0_validation_inputs_sha256": digest(args.p0_validation / "inputs.json"),
-        "p0_manifest_sha256": digest(args.p0_root / "pilot/manifest.jsonl"),
-        "p0_benchmark_sha256": digest(args.p0_root / "pilot/benchmark.json"),
+        "p0_manifest_sha256": digest(args.p0_root / args.subset / "manifest.jsonl"),
+        "p0_benchmark_sha256": digest(args.p0_root / args.subset / "benchmark.json"),
         "p1_inputs_sha256": digest(args.p1_root / "inputs.json"),
         "p1_complete_sha256": digest(args.p1_root / "COMPLETE.json"),
         "p1_reference_inputs_sha256": digest(args.p1_reference / "inputs.json"),
@@ -521,17 +531,18 @@ def main():
                  "E04 快照模型指纹不能由当前已提交模型重建，因此用相同输入重放 E05_compat；"
                  "运行器逐位断言五个有效 A 与 E04 完全一致，不迁移或绕过快照模型指纹。"),
     })
-    episodes = json.loads((args.p0_root / "pilot/benchmark.json").read_text())
+    episodes = json.loads((args.p0_root / args.subset / "benchmark.json").read_text())
     rows = [json.loads(line) for line in
-            (args.p0_root / "pilot/manifest.jsonl").read_text().splitlines()]
+            (args.p0_root / args.subset / "manifest.jsonl").read_text().splitlines()]
     p1 = [json.loads(line) for line in (args.p1_root / "episodes.jsonl").read_text().splitlines()]
     p1_reference = [json.loads(line) for line in
                     (args.p1_reference / "episodes.jsonl").read_text().splitlines()]
     p2 = [json.loads(line) for line in (args.p2_root / "episodes.jsonl").read_text().splitlines()]
-    if not (len(episodes) == len(rows) == len(p1) == len(p1_reference) == len(p2) == 10):
-        raise ValueError("P0/P1/P2 试点数量不是同一组 10 条")
+    expected = 10 if args.subset == "pilot" else 100
+    if not (len(episodes) == len(rows) == len(p1) == len(p1_reference) == len(p2) == expected):
+        raise ValueError(f"P0/P1/P2 {args.subset} 数量不是同一组 {expected} 条")
     valid_indexes = [index for index, value in enumerate(p1) if value["status"] == "completed"]
-    if valid_indexes != [2, 3, 5, 6, 8]:
+    if args.subset == "pilot" and valid_indexes != [2, 3, 5, 6, 8]:
         raise ValueError(f"有效 A 索引改变：{valid_indexes}")
     reference_valid = [index for index, value in enumerate(p1_reference)
                        if value["status"] == "completed"]
@@ -547,7 +558,7 @@ def main():
     selected = valid_indexes if args.episode_index is None else [args.episode_index]
     if any(index not in valid_indexes for index in selected):
         raise ValueError("P3 只能扫描有效 A")
-    roots = {"p1": str(args.p1_root), "p2": str(args.p2_root)}
+    roots = {"p1": str(args.p1_root), "p2": str(args.p2_root), "subset": args.subset}
     payloads = [(index, episodes[index], rows[index], p1[index], p2[index], roots,
                  str(args.output), inputs_sha, args.max_b_points) for index in selected]
     scanned = []
@@ -589,8 +600,8 @@ def main():
     by_index = {value["subset_index"]: value for value in scanned}
     results = [by_index[index] if index in by_index else
                _skip_result(index, rows[index], p1[index], p2[index], inputs_sha)
-               for index in range(10)]
-    summary = aggregate(results, args.output, inputs_path)
+               for index in range(expected)]
+    summary = aggregate(results, args.output, inputs_path, args.subset)
     print(json.dumps(summary, ensure_ascii=False), flush=True)
     return 0 if summary["complete"] else 1
 

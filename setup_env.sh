@@ -23,5 +23,5 @@ export MALLOC_ARENA_MAX=2              # 限制 arena 数量（最关键，几�
 export MALLOC_TRIM_THRESHOLD_=131072   # 空闲超过 128 KB 就归还 OS
 export MALLOC_MMAP_THRESHOLD_=131072   # 大块走 mmap，free 时直接归还
 
-export MUJOCO_EGL_DEVICE_ID=3
-export CUDA_VISIBLE_DEVICES=3
+export MUJOCO_EGL_DEVICE_ID=5
+export CUDA_VISIBLE_DEVICES=5

@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 from datetime import date
 from pathlib import Path
 
@@ -16,14 +17,39 @@ COLORS = {
     "scene_changed": "#dd3497",
 }
 
+# 面板版式：≤10 条沿用试点版式（5 列、字体完整），更多条数切换为 10 列密排网格
+PILOT_PANELS = 10
+WIDE_COLS = 10
+PILOT_COLS = 5
+PILOT_CELL = (3.0, 3.25)   # 试点版式单元格尺寸（英寸）
+WIDE_CELL = 2.4            # 密排版式单元格边长（英寸）
+PILOT_DPI = 180
+WIDE_DPI = 160
+FORMAL_BATCH = 100  # 正式批冻结规模（P0 formal 清单）
+
 
 def render(output: Path, report: Path, figure_prefix: Path, experiment: str = "P1",
            report_date: str | None = None):
     summary = json.loads((output / "summary.json").read_text())
     episodes = [json.loads(line) for line in (output / "episodes.jsonl").read_text().splitlines()]
     figure_prefix.parent.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(2, 5, figsize=(15, 6.5), constrained_layout=True)
-    for ax, row in zip(axes.flat, episodes):
+    n = len(episodes)
+    wide = n > PILOT_PANELS
+    cols = WIDE_COLS if wide else min(n, PILOT_COLS)
+    rows = math.ceil(n / cols)
+    if wide:
+        cell_w = cell_h = WIDE_CELL
+        dpi = WIDE_DPI
+    else:
+        cell_w, cell_h = PILOT_CELL
+        dpi = PILOT_DPI
+    title_fs, tick_fs = (5, 4) if wide else (9, 7)
+    fig, axes = plt.subplots(rows, cols, figsize=(cell_w * cols, cell_h * rows),
+                             constrained_layout=True)
+    axes = np.atleast_1d(axes).ravel()
+    for ax in axes[n:]:
+        ax.set_visible(False)
+    for idx, (ax, row) in enumerate(zip(axes, episodes)):
         path = output / "episodes" / f"{row['subset_index']:03d}" / "trajectory.npz"
         if path.exists():
             with np.load(path) as data:
@@ -44,19 +70,34 @@ def render(output: Path, report: Path, figure_prefix: Path, experiment: str = "P
                 ax.scatter(*goal, marker="x", s=40, c="#6a51a3", label="goal")
             if np.isfinite(endpoint).all():
                 ax.scatter(*endpoint[:2], marker="+", s=55, c="#e6550d", label="planned A")
-        ax.set_title(f"#{row['subset_index']} H{row['house']} · {row['status']}", fontsize=9)
+        ax.set_title(f"#{row['subset_index']} H{row['house']} · {row['status']}", fontsize=title_fs)
         ax.set_aspect("equal", adjustable="datalim")
-        ax.set_xlabel("world x (m)", fontsize=8)
-        ax.set_ylabel("world y (m)", fontsize=8)
-        ax.tick_params(labelsize=7)
-    handles, labels = axes.flat[0].get_legend_handles_labels()
+        if wide:
+            # 密排网格只在左缘/下缘标注轴名，避免 100 个面板重复文字
+            if idx % cols == 0:
+                ax.set_ylabel("world y (m)", fontsize=6)
+            if idx >= n - cols:
+                ax.set_xlabel("world x (m)", fontsize=6)
+        else:
+            ax.set_xlabel("world x (m)", fontsize=8)
+            ax.set_ylabel("world y (m)", fontsize=8)
+        ax.tick_params(labelsize=tick_fs)
+    handles, labels = [], []
+    for ax in axes:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            if label not in labels:
+                handles.append(handle)
+                labels.append(label)
     if handles:
         fig.legend(handles, labels, loc="outside lower center", ncol=5, fontsize=8)
-    fig.suptitle(f"{experiment} real A* navigation trajectories (one panel per frozen pilot episode)")
+    subset_label = {"formal": "formal", "pilot": "frozen pilot"}.get(
+        summary.get("subset", ""), "frozen pilot")
+    fig.suptitle(f"{experiment} real A* navigation trajectories "
+                 f"(one panel per {subset_label} episode, n={n})")
     svg = figure_prefix.with_suffix(".svg")
     png = figure_prefix.with_suffix(".png")
-    fig.savefig(svg, dpi=180)
-    fig.savefig(png, dpi=180)
+    fig.savefig(svg, dpi=dpi)
+    fig.savefig(png, dpi=dpi)
     plt.close(fig)
     assert svg.exists() and png.exists()
     plt.imread(png)  # Rendering/readability smoke check.
@@ -73,14 +114,19 @@ def render(output: Path, report: Path, figure_prefix: Path, experiment: str = "P
                   if summary["valid_A"] == 0 else "")
     rel_figure = Path("figures") / png.name
     today = report_date or date.today().isoformat()
+    formal_simulation = summary.get("formal_simulation", "not_run")
+    expected = summary.get("expected", n)
+    subset_zh = "正式" if summary.get("subset") == "formal" else "试点"
+    boundary_runtime = ("本轮没有运行 IK、抓取或局部搜索。" if formal_simulation == "completed"
+                        else f"本轮没有运行 IK、抓取、局部搜索或正式 {FORMAL_BATCH} 条仿真。")
     conclusion = (
-        f"冻结的 **{summary['attempted']}** 条试点均已分类，得到 **{summary['valid_A']}** 个有效 nominal A；"
+        f"冻结的 **{summary['attempted']}** 条{subset_zh}样本均已分类，得到 **{summary['valid_A']}** 个有效 nominal A；"
         f"P2 gate 为 **{summary['p2_gate']}**。这只验收真实导航和状态交接，不评价抓取或 last-mile 效果。"
     )
 
     text = f"""# Last-mile {experiment} 验收说明
 
-**{today}｜P1 协议完成；未启动 P2/P3/P4。**
+**{today}｜P1 协议完成；未启动 P2。**
 
 {conclusion}
 
@@ -92,11 +138,11 @@ def render(output: Path, report: Path, figure_prefix: Path, experiment: str = "P
 | 有效 A | {summary['valid_A']} |
 | 终止分布 | `{json.dumps(summary['status_counts'], ensure_ascii=False, sort_keys=True)}` |
 | P2 gate | `{summary['p2_gate']}`；本任务未启动 P2 |
-| 正式 100 条 | 哈希与格式已审计；`formal_simulation=not_run` |
+| 正式批仿真 | 哈希与格式已审计；`formal_simulation={formal_simulation}` |
 
 ![{experiment} 真实导航轨迹]({rel_figure.as_posix()})
 
-图中每个面板对应一条冻结试点。灰点是 0.30 m 安全半径下的可通行区域；线为控制器实际执行轨迹；方块、星号、叉号、加号分别表示远端起点、目标物体、导航采样目标和截断后的规划 A。颜色表示最终终止分类。观测单位为单个源目标实例；没有统计不确定度。
+图中每个面板对应一条{subset_zh}样本。灰点是 0.30 m 安全半径下的可通行区域；线为控制器实际执行轨迹；方块、星号、叉号、加号分别表示远端起点、目标物体、导航采样目标和截断后的规划 A。颜色表示最终终止分类。观测单位为单个源目标实例；没有统计不确定度。
 
 ## 逐条审计
 
@@ -108,9 +154,9 @@ def render(output: Path, report: Path, figure_prefix: Path, experiment: str = "P
 
 ## 边界
 
-- 本轮没有运行 IK、抓取、局部搜索或正式 100 条仿真。
+- {boundary_runtime}
 - A* 的 0.8 m 是路径截断半径，不代表实际目标距离恰为 0.8 m。
-- `COMPLETE.json` 只表示 10 条均有终止分类，不表示 10/10 导航成功。
+- `COMPLETE.json` 只表示 {expected} 条均有终止分类，不表示 {expected}/{expected} 导航成功。
 - 当前资产环境仍是 P0 记录的本地版本；不声称复现其他资产版本。
 """
     report.parent.mkdir(parents=True, exist_ok=True)

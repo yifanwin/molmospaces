@@ -58,6 +58,7 @@ CORRIDOR = CorridorConfig()
 
 def implementation_hashes(repo: Path) -> dict[str, str]:
     paths = [
+        repo / "molmo_spaces/kinematics/mujoco_kinematics.py",
         repo / "molmo_spaces/evaluation/last_mile/feasibility.py",
         repo / "molmo_spaces/evaluation/last_mile/local_search.py",
         repo / "molmo_spaces/evaluation/last_mile/run_p3.py",

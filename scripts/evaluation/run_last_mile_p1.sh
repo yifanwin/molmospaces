@@ -13,8 +13,8 @@ export PYOPENGL_PLATFORM="${PYOPENGL_PLATFORM:-egl}"
 PYTHON_BIN="${PYTHON_BIN:-$WORKSPACE_ROOT/molmospaces/.venv/bin/python}"
 P0_ROOT="${P0_ROOT:-$REPO/eval_output/last_mile/p0_20260921}"
 OUTPUT="${OUTPUT:-$REPO/eval_output/last_mile/p1_20260921/E01}"
-REPORT="${REPORT:-$REPO/docs/last_mile_p1_e01_20260921.md}"
-FIGURE_PREFIX="${FIGURE_PREFIX:-$REPO/docs/figures/last_mile_p1_e01_navigation}"
+REPORT="${REPORT:-$REPO/docs/last_mile/p1/last_mile_p1_e01_20260921.md}"
+FIGURE_PREFIX="${FIGURE_PREFIX:-$REPO/docs/last_mile/p1/figures/last_mile_p1_e01_navigation}"
 MODE="${1:-all}"
 shift || true
 case "$MODE" in

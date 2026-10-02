@@ -1,6 +1,9 @@
 # Last-mile P0→P3 运行手册
 
-**2026-09-23｜worktree `exp/last-mile-p0`（`.worktrees/last-mile-p0`）｜命令与判据以当前工作区为准：HEAD `2e96bec` + 未提交的 P3 formal / P4 改动。本文只覆盖 P0–P3，P4 见 `docs/last_mile_runbook_p4_20260923.md`。**
+**2026-09-23｜worktree `exp/last-mile-p0`（`.worktrees/last-mile-p0`）｜命令与判据以当前工作区为准：HEAD `2e96bec` + 未提交的 P3 formal / P4 改动。本文只覆盖 P0–P3，P4 见 `docs/last_mile/runbook/last_mile_runbook_p4_20260923.md`。**
+
+> 2026-09-30 目录整理后，报告与图从 `docs/last_mile_*.md` + `docs/figures/` 迁到 `docs/last_mile/{p0..p4,runbook,analysis}/`，
+> 每阶段的图放在该阶段的 `figures/` 子目录。下文的命令与判据仍然有效，只有路径按新布局理解。
 
 | 阶段 | 试点（10 条 / 5 个有效 A） | 正式（formal 100 条） |
 |---|---|---|
@@ -18,7 +21,7 @@
 | P0 建清单 | `run_last_mile_p0.sh build` | `p0_20260921/{pilot,formal}/` | 100 条 formal 冻结完成 | 一次即可，勿重跑 |
 | P0 验收 | `run_last_mile_p0.sh validate --subset formal` | `validation_formal_minimal/` | `passed==expected==100 && COMPLETE.json` | 35.4 s/条（已跑完） |
 | P1 导航 | `run_last_mile_p1.sh run --subset formal` | `p1_20260922/formal_E01/` | `classified==expected==100 && COMPLETE.json` | ✅ ≈71 s/条 → 100 条约 2 h |
-| P1 出图 | `run_last_mile_p1.sh report` | `docs/last_mile_p1_*.md` + `docs/figures/` | 图与 md 生成 | ✅ 需显式设 REPORT/FIGURE_PREFIX |
+| P1 出图 | `run_last_mile_p1.sh report` | `docs/last_mile/p1/*.md` + `docs/last_mile/p1/figures/` | 图与 md 生成 | ✅ 需显式设 REPORT/FIGURE_PREFIX |
 | P2 评价 | `run_last_mile_p2.sh run --subset formal` | `p2_20260922/formal_E01/` | 有效 A 全部有确定标签 + `COMPLETE.json` | ✅ ≈78 s/有效 A |
 | P3 扫描（试点） | `run_last_mile_p3.sh all` | `p3_20260922/E01/` | 5 个有效 A ×245 点 `complete` | ✅ 20:40→23:28（含重试与聚合） |
 | P3 扫描（正式） | `SUBSET=formal run_last_mile_p3.sh all` | `p3_20260923/formal_E01/` | 全部有效 A ×245 点 `complete` | ⬜ 38 个有效 A，粗估 8–20 h |
@@ -80,12 +83,12 @@ OUTPUT="$P1_FORMAL" bash scripts/evaluation/run_last_mile_p1.sh run --subset for
 # REPORT/FIGURE_PREFIX 必须显式给：默认值写死指向试点 E01 的报告和图，
 # 不覆盖会直接改写 E01 的文档与图片（2026-09-23 实际发生过）
 OUTPUT="$P1_FORMAL" \
-REPORT="$PWD/docs/last_mile_p1_formal_20260923.md" \
-FIGURE_PREFIX="$PWD/docs/figures/last_mile_p1_formal_navigation" \
+REPORT="$PWD/docs/last_mile/p1/last_mile_p1_formal_20260923.md" \
+FIGURE_PREFIX="$PWD/docs/last_mile/p1/figures/last_mile_p1_formal_navigation" \
   bash scripts/evaluation/run_last_mile_p1.sh report
 ```
 
-现有正式报告：`docs/last_mile_p1_202609221-100.md`（文件名沿用当时的命名，图仍挂在 `docs/figures/last_mile_p1_e01_navigation.*` 前缀下，容易被误认成试点图）。
+现有正式报告：`docs/last_mile/p1/last_mile_p1_202609221-100.md`（文件名沿用当时的命名，图仍挂在 `docs/last_mile/p1/figures/last_mile_p1_e01_navigation.*` 前缀下，容易被误认成试点图）。
 
 产物：`episodes.jsonl`、`summary.json`、`COMPLETE.json`、`inputs.json`、`episodes/NNN/{result.json,trajectory.npz,A_snapshot.npz(仅有效 A)}`。
 
@@ -217,5 +220,5 @@ P1/P2 每条 episode 完成都会打印一行 `{subset_index, house, status, ter
 
 - 阶段目录：`eval_output/last_mile/p{0,1,2,3,4}_<日期>/`；同一阶段换代码或协议 → 新 `E0N` 目录，formal 批用 `formal_E01`。旧目录一律只读（P4 手册同样规定"P0–P3 原目录只读，不重建、不覆盖"）。
 - 每个运行必带 `inputs.json`（输入 + 实现 + base_commit 指纹）与 `COMPLETE.json`（P3 另写 `provenance.json`）；`COMPLETE.json` 只证明"该阶段该子集全部条目都有唯一分类"，不证明任务成功。
-- 报告与图：`docs/last_mile_<阶段>_<实验号>_<日期>.md` + `docs/figures/` 下同名 png/svg；图表只画本次真实数据。
-- 相关文档：计划 [`Last-mile预实验分阶段实施计划_20260921.md`](../../../Last-mile预实验分阶段实施计划_20260921.md)（在主工作区根目录，不在 worktree 内）、阶段验收 `docs/last_mile_p{0,1,2,3}_*.md`（正式批报告是 `docs/last_mile_p1_202609221-100.md`）、**P4 另有手册 `docs/last_mile_runbook_p4_20260923.md`**、实现说明 `molmo_spaces/evaluation/last_mile/README.md`、P0 冻结数据说明 `eval_output/last_mile/p0_20260921/README.md`（该文写于 P3 formal 支持之前，"当前还没有 P3 runner"等句子已过时，以本手册为准）。
+- 报告与图：`docs/last_mile/p<阶段>/last_mile_<阶段>_<实验号>_<日期>.md` + 同目录 `figures/` 下同名 png/svg；图表只画本次真实数据。
+- 相关文档：计划 [`Last-mile预实验分阶段实施计划_20260921.md`](../../../../../Last-mile预实验分阶段实施计划_20260921.md)（在主工作区根目录，不在 worktree 内）、阶段验收 `docs/last_mile/p{0,1,2,3}/*.md`（正式批报告是 `docs/last_mile/p1/last_mile_p1_202609221-100.md`）、**P4 另有手册 `docs/last_mile/runbook/last_mile_runbook_p4_20260923.md`**、实现说明 `molmo_spaces/evaluation/last_mile/README.md`、P0 冻结数据说明 `eval_output/last_mile/p0_20260921/README.md`（该文写于 P3 formal 支持之前，"当前还没有 P3 runner"等句子已过时，以本手册为准）。

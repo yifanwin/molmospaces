@@ -48,6 +48,7 @@ PROTOCOL = {
 
 def implementation_hashes(repo: Path):
     paths = [
+        repo / "molmo_spaces/kinematics/mujoco_kinematics.py",
         repo / "molmo_spaces/evaluation/last_mile/feasibility.py",
         repo / "molmo_spaces/evaluation/last_mile/run_p2.py",
         repo / "molmo_spaces/evaluation/last_mile/snapshot.py",

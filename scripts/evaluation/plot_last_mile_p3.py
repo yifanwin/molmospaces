@@ -82,7 +82,7 @@ def plot_maps(root, repo, episodes, candidates):
     ]
     fig.legend(handles=handles, loc="outside lower center", ncol=5, frameon=False)
     fig.suptitle("P3 局部站位可行性地图（每行一个有效 A；虚线为主圆盘）")
-    prefix = repo / "docs/figures/last_mile_p3_e01_maps"
+    prefix = repo / "docs/last_mile/p3/figures/last_mile_p3_e01_maps"
     prefix.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(prefix.with_suffix(".svg"), bbox_inches="tight")
     fig.savefig(prefix.with_suffix(".png"), dpi=170, bbox_inches="tight")
@@ -116,7 +116,7 @@ def plot_budget(repo, metrics):
     ax.grid(alpha=.25)
     ax.legend(frameon=False, fontsize=9)
     ax.set_title("P3 查询预算与可达可行救援")
-    prefix = repo / "docs/figures/last_mile_p3_e01_budget"
+    prefix = repo / "docs/last_mile/p3/figures/last_mile_p3_e01_budget"
     fig.savefig(prefix.with_suffix(".svg"), bbox_inches="tight")
     fig.savefig(prefix.with_suffix(".png"), dpi=180, bbox_inches="tight")
     plt.close(fig)
@@ -222,7 +222,7 @@ def make_report(root, repo, summary, metrics, episodes):
 
 源数据：`{root.relative_to(repo)}/candidates.jsonl`、`metrics.json`。图源：`scripts/evaluation/plot_last_mile_p3.py`，并保留 SVG/PNG。`COMPLETE.json` 只表示扫描和分类完整。
 """
-    path = repo / "docs/last_mile_p3_e01_20260922.md"
+    path = repo / "docs/last_mile/p3/last_mile_p3_e01_20260922.md"
     path.write_text(report)
     return path
 
@@ -242,10 +242,10 @@ def main():
     plot_budget(args.repo, metrics)
     report = make_report(args.input, args.repo, summary, metrics, episodes)
     print(json.dumps({"report": str(report), "figures": [
-        "docs/figures/last_mile_p3_e01_maps.svg",
-        "docs/figures/last_mile_p3_e01_maps.png",
-        "docs/figures/last_mile_p3_e01_budget.svg",
-        "docs/figures/last_mile_p3_e01_budget.png",
+        "docs/last_mile/p3/figures/last_mile_p3_e01_maps.svg",
+        "docs/last_mile/p3/figures/last_mile_p3_e01_maps.png",
+        "docs/last_mile/p3/figures/last_mile_p3_e01_budget.svg",
+        "docs/last_mile/p3/figures/last_mile_p3_e01_budget.png",
     ]}, ensure_ascii=False))
 
 

@@ -474,7 +474,8 @@ def main():
             raise ValueError(f"P0/P1/P2/P3 episode 身份不一致：{i}")
     if args.subset == "pilot" and len(episodes) != 10:
         raise ValueError("试点必须是冻结的 10 条")
-    impl = ["molmo_spaces/evaluation/last_mile/run_p4.py",
+    impl = ["molmo_spaces/kinematics/mujoco_kinematics.py",
+            "molmo_spaces/evaluation/last_mile/run_p4.py",
             "molmo_spaces/evaluation/last_mile/decision.py",
             "molmo_spaces/evaluation/last_mile/pick_validator.py",
             "scripts/evaluation/run_last_mile_p4.sh",

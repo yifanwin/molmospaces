@@ -250,28 +250,21 @@ B 静态 Pick=`insufficient_lift_or_drop`；转移到达误差 4.899786067573395
 转移全部到达 18/18；到位误差平移最大 0.00364 m、yaw 最大 0.51018°。
 转移后 replan 状态分布：{'unknown': 11, 'not_found': 2, 'feasible': 5}；B 转移后 Pick 状态分布：{'planner_no_witness': 13, 'insufficient_lift_or_drop': 4, 'success': 1}。
 
-### 已知缺陷：夹爪 qpos 在限位外 1e-16 被夹回，伪造出 unknown
+### 已知缺陷（本轮真实存在，已在 2026-09-30 修复）
 
 `feasibility._solve()` 用 `np.array_equal` 逐位检查「IK 只改变了所选臂」，而 `MlSpacesKinematics._constrain_state()` 每个迭代步都会把全部 move group clip 到 `joint_pos_limits`。快照恢复后的夹爪关节会落在一个「超上界约 3e-16」的浮点态上（例如 `left_gripper=[-0.04999999999754231, +0.050000000000000315]`，上界 0.05），clip 把它改成名义值 0.05 → 逐位比较失败 → `FeasibilityUnknown(ik_changed_locked_group)` → `evaluate()` 返回 `unknown`。
 
-一个进程内可重复复现：index 12 转移后 replan、index 02 点 G140 都命中同一断言，日志里 `error` 分别为 `ik_changed_locked_group:left_gripper` 与 `:right_gripper`。
+一个进程内可重复复现：index 12 转移后 replan、index 02 点 G140 都命中同一断言。
 
 影响面（已核对，均不改变方向判断）：
-- P4 formal：18 个配对里转移后 replan `unknown` 11 个，这些条目的 Pick 结果记作 `planner_no_witness` 而非物理失败；另有 5 个 replan `feasible`，真实 Pick 照样失败，说明该伪影不支配结论。
-- P3 formal：全图 986 个点（圆盘 381 个）被同一断言记为 `unknown`；P3 的 `reachable_unknown` 为 0，`I_reach` 不受影响，但 `unknown` 点计入了状态分布。
+- 本轮：18 个配对里转移后 replan `unknown` 11 个，这些条目的 Pick 结果记作 `planner_no_witness` 而非物理失败；另有 5 个 replan `feasible`，真实 Pick 照样失败，说明该伪影不支配结论。
+- P3 formal：全图 986 个点（圆盘 381 个）被同一断言记为 `unknown`；这些点全部 `reachable=False`，所以 `reachable_unknown` 为 0、`I_reach` 与 B* 选择不受影响。
 - P2 formal：0 个 `unknown`（A 处在 F_IK 就返回 `not_found`，从未走到需要逐位比较的分支）。
 
-正确修法是让 locked-group 比较带容差、或让 IK 的限位 clip 不作用于未解锁的 move group；两者都会改变 `feasibility.py` 的哈希，必须在新运行目录里重跑，不能续跑既有结果。本轮正式批**不做**该修复，只把现象如实写入报告。
+修复与重跑见 `docs/last_mile/p4/last_mile_p4_formal_e01_20260930.md`（新目录 `eval_output/last_mile/p4_20260930/E01`）。
 
 ### 预登记阈值逐条核对
 
 - 继续条件：`I_reach`=0.474 ≥ 0.20 ✓；出现救援的 house 18 个 ≥ 5 ✓；配对执行改善的 house 聚类区间 [0.0, 0.2777777777777778] 下界 = 0 ✗；unknown 不改变方向 ✓；严格 Pick 物理正负校准缺失 ✗。
 - 停止条件：`I_reach` 区间上界 0.632 ≥ 0.05，不满足停止阈值 ✗。
-- 逐条核对的结果是「两边都不成立」，因此决策函数返回无结论；真正阻断继续的是**配对执行改善的区间下界为 0**与**缺失物理校准**，不是样本量或 house 覆盖。
-
-### 本轮可下的事实性结论
-
-几何层面：A 处 38/38 首失败层为 `F_IK`（P2 记录），18/38 的邻域存在可达可行 B，`I_reach`=0.474（house 聚类区间 [0.316, 0.632]）。这与 `p1-fik-is-protocol-artifact` 的结论一致：A 处够不到是 P1 截断 + 冻结 torso 的协议伪影，不能读成场景不可操作。
-执行层面：18 个静态 B 只有 2 个真实 Pick 成功（`house 405` 与 `house 706`），转移全部到达、到位误差 < 4 mm / < 0.52°，但转移后只有 1 个成功、转移相对静态 B 的成功率差 -0.056。即「几何可行」与「真实抓得住」之间还有一层：多数失败是双指未能形成持续持有（`insufficient_lift_or_drop` 14/18，最大抬高常见 < 5 cm）。
-
-结论：本轮**只支持几何代理层面的站位效应**；把它升级为真实执行层面的 last-mile，需要先修夹持/抬升链，并补物理正负校准的严格 Pick 记录。
+- 逐条核对的结果是「两边都不成立」，因此决策函数返回无结论；真正阻断继续的是**配对执行改善的区间下界为 0**与**缺失物理校准**。

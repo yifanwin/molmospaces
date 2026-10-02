@@ -58,13 +58,26 @@ class MlSpacesKinematics:
         )
         mujoco.mj_forward(self._mj_model, self._mj_data)
 
-    def _constrain_state(self) -> None:
+    def _constrain_state(self, unlocked_move_group_ids: list[str] | None = None) -> None:
         """Constrain the current state to be within the joint limits.
 
-        This method clips all joint positions to their respective limits. It should be
+        This method clips joint positions to their respective limits. It should be
         called after any operation that might move joints outside their valid ranges.
+
+        Args:
+            unlocked_move_group_ids: The move groups the solver is allowed to move. Only
+                these are clipped. Callers that compare locked groups bit-for-bit against
+                their input (e.g. the last-mile feasibility validator) rely on locked
+                joints being returned exactly as passed in; clipping an input that sits a
+                few ulp outside a limit would otherwise turn a measurable sample into an
+                apparent "IK moved a locked joint" failure. ``None`` clips every group,
+                which is the historical behavior for callers that move all of them.
         """
-        for mg_id in self._robot_view.move_group_ids():
+        for mg_id in (
+            self._robot_view.move_group_ids()
+            if unlocked_move_group_ids is None
+            else unlocked_move_group_ids
+        ):
             mg = self._robot_view.get_move_group(mg_id)
             mg.joint_pos = np.clip(
                 mg.joint_pos, mg.joint_pos_limits[:, 0], mg.joint_pos_limits[:, 1]
@@ -247,7 +260,7 @@ class MlSpacesKinematics:
                 mg = self._robot_view.get_move_group(mg_id)
                 mg.joint_pos = mg.integrate_joint_vel(mg.joint_pos, dq[j : j + mg.vel_dim])
                 j += mg.vel_dim
-            self._constrain_state()
+            self._constrain_state(unlocked_move_group_ids)
 
         if succ:
             return self._robot_view.get_qpos_dict()

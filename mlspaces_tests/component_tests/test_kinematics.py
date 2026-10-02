@@ -280,6 +280,41 @@ class TestMlSpacesKinematicsRBY1M:
         fk_check = rby1m_mujoco_kin.fk(result, moved_bp, rel_to_base=True)
         np.testing.assert_allclose(fk_check["left_gripper"][:3, 3], target_rel[:3, 3], atol=1e-3)
 
+    def test_ik_leaves_locked_groups_bitwise_unchanged(self, rby1m_mujoco_kin, rby1m_q0):
+        """Callers compare locked groups bit-for-bit, so IK must not rewrite them.
+
+        ``gripper_finger_*`` joints have hard limits (-0.05, 0) / (0, 0.05); a snapshot
+        restored from disk can sit a few ulp outside (``+0.050000000000000315``). Clipping
+        that back to the nominal limit makes a measurable sample look like "IK moved a
+        locked joint", which the last-mile feasibility validator reports as ``unknown``.
+        """
+        base_pose = rby1m_base_qpos_to_pose(rby1m_q0["base"])
+        fk_result = rby1m_mujoco_kin.fk(rby1m_q0, base_pose)
+        target = fk_result["left_gripper"].copy()
+        target[:3, 3] += [0.02, 0.0, 0.02]
+
+        # 两个夹爪都放在各自限位外 1 ulp：不设下界时 abs(0.05) 的 1 ulp 就是 7.1e-18。
+        out_of_range = {k: np.array(v, dtype=np.float64) for k, v in rby1m_q0.items()}
+        for name, value in (("left_gripper", 0.05), ("right_gripper", 0.05)):
+            above = np.nextafter(np.float64(value), np.float64(np.inf))
+            below = np.nextafter(np.float64(-value), np.float64(-np.inf))
+            out_of_range[name] = np.array([below, above])
+            assert (out_of_range[name] > np.abs(rby1m_q0[name])[0]).any()
+
+        result = rby1m_mujoco_kin.ik("left_gripper", target, ["left_arm"], out_of_range, base_pose)
+
+        assert result is not None
+        # 只有 left_arm 被解锁，其余组（含两个夹爪）必须逐位保持原样。
+        for name in ("right_arm", "torso", "head", "base"):
+            np.testing.assert_array_equal(
+                result[name], out_of_range[name], err_msg=f"{name} 被 IK 改写"
+            )
+        for name in ("left_gripper", "right_gripper"):
+            np.testing.assert_array_equal(
+                result[name], out_of_range[name], err_msg=f"{name} 的限位外输入被 clip"
+            )
+        assert not np.array_equal(result["left_arm"], out_of_range["left_arm"])
+
 
 # --- SimpleWarpKinematics: FrankaDroid ---
 

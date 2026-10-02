@@ -105,7 +105,7 @@ def _mechanism_lines(root, pairs, title):
     return lines
 
 
-def _pilot_report(metrics, root, repo, data, pairs):
+def _pilot_report(metrics, root, repo, data, pairs, figure_name):
     lines = [
         f"# Last-mile {metrics['experiment']} 试点执行报告", "",
         "**结论：试点的几何可行 B 已真实到达，但静态与转移后 Pick 均未成功；正式方向判定仍为证据不足。**", "",
@@ -120,7 +120,7 @@ def _pilot_report(metrics, root, repo, data, pairs):
         f"转移尝试 {metrics['N_transfer_attempted']}，到达 {metrics['N_transfer_arrived']}；转移后成功 {metrics['transfer_pick_success']}；转移相对静态 B 差 {metrics['transfer_minus_static_B']}。", "",
     ]
     if pairs:
-        lines += [f"![配对真实 Pick](figures/last_mile_{metrics['experiment'].lower().replace('-', '_')}_paired_pick.png)", "",
+        lines += [f"![配对真实 Pick](figures/{figure_name}.png)", "",
                   "图 1：每行是一个冻结的源目标实例；灰色表示执行前无路径，橙色表示真实执行未通过严格 Pick，绿色表示成功。无误差棒，试点不做统计推断。", ""]
     lines += _paired_markdown(data) + ["", "## 证据边界与下一步", "",
               "真实执行成功必须满足双指接触、目标离开支撑并抬高至少 5 cm、连续稳定 1 s；闭爪至少 7 个 100 ms 步。",
@@ -138,7 +138,7 @@ def _pilot_report(metrics, root, repo, data, pairs):
     return lines
 
 
-def _formal_report(metrics, root, repo, data, pairs):
+def _formal_report(metrics, root, repo, data, pairs, figure_name):
     decision = metrics.get("formal_decision", {})
     cells = metrics.get("pair_cells", {})
     transfer_known = cells["00"] + cells["01"] + cells["10"] + cells["11"]
@@ -166,7 +166,7 @@ def _formal_report(metrics, root, repo, data, pairs):
         f"转移相对静态 B 差 {metrics['transfer_minus_static_B']}。", "",
     ]
     if pairs:
-        lines += [f"![配对真实 Pick](figures/last_mile_{metrics['experiment'].lower().replace('-', '_')}_paired_pick.png)", "",
+        lines += [f"![配对真实 Pick](figures/{figure_name}.png)", "",
                   "图 1：每行一个冻结源目标实例，三列分别是 A、静态 B 与转移后 B 的真实 Pick 结果；颜色含义见正文与图例文字。", ""]
     lines += _paired_markdown(data) + ["", "## 预登记决策", "",
               f"house 聚类 bootstrap：I_reach 区间 {decision.get('I_reach_house_ci95')}，"
@@ -202,15 +202,18 @@ def main():
     metrics = json.loads((root / "metrics.json").read_text())
     valid = [r for r in data if r["p1_status"] == "completed"]
     pairs = [r for r in valid if r.get("B_point_id")]
-    docs = args.repo / "docs"
+    docs = args.repo / "docs/last_mile/p4"
     figures = docs / "figures"
     figures.mkdir(parents=True, exist_ok=True)
     run_tag = metrics["experiment"].lower().replace("-", "_")
-    _paired_figure(pairs, figures, f"last_mile_{run_tag}_paired_pick")
+    # 同一子集的多次运行（如 2026-09-30 的 IK 修复重跑）会共用 run_tag，
+    # 图和报告都必须带日期，否则后一次会静默覆盖前一次的证据。
+    figure_name = f"last_mile_{run_tag}_{args.date}_paired_pick"
+    _paired_figure(pairs, figures, figure_name)
     if metrics.get("subset") == "formal":
-        lines = _formal_report(metrics, root, args.repo, data, pairs)
+        lines = _formal_report(metrics, root, args.repo, data, pairs, figure_name)
     else:
-        lines = _pilot_report(metrics, root, args.repo, data, pairs)
+        lines = _pilot_report(metrics, root, args.repo, data, pairs, figure_name)
     report = docs / f"last_mile_{run_tag}_{args.date}.md"
     report.write_text("\n".join(lines))
     print(report)
